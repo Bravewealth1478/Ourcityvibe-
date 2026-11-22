@@ -1,11 +1,7 @@
 import type { Config, Context } from "@netlify/edge-functions";
 
 const allowedSources = new Set(["instagram", "tiktok", "whatsapp", "x", "facebook", "other"]);
-const botPattern = /bot|crawler|spider|preview|facebookexternalhit|facebot|twitterbot|slackbot|telegrambot|linkedinbot|googlebot|discordbot|pinterestbot|applebot|bingbot|embedly|quora link preview|whatsapp\/\d/i;
-
-function jsonHeaders() {
-  return { "content-type": "application/json", "cache-control": "no-store" };
-}
+const botPattern = /bot|crawler|spider|preview|facebookexternalhit|facebot|twitterbot|slackbot|telegrambot|linkedinbot|googlebot|discordbot|pinterestbot|applebot|bingbot|embedly|quora link preview/i;
 
 function page(message: string, status: number) {
   return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OurCityVibe</title><body style="margin:0;background:#0b1713;color:#f4f5ef;font:16px system-ui;display:grid;min-height:100vh;place-items:center"><main style="max-width:460px;padding:32px"><p style="color:#8bd5a5;font-weight:700;letter-spacing:2px">OURCITYVIBE</p><h1 style="font-size:32px">${message}</h1><p style="color:#a6b5ab">The event link may be unavailable or no longer active.</p></main></body></html>`, {
@@ -78,7 +74,10 @@ export default async function handler(request: Request, context: Context): Promi
   const userAgent = request.headers.get("user-agent") ?? "";
   const sourceParam = new URL(request.url).searchParams.get("src")?.toLowerCase() ?? "other";
   const source = allowedSources.has(sourceParam) ? sourceParam : "other";
-  const isBot = botPattern.test(userAgent);
+  // WhatsApp's real in-app browser identifies as Android/iOS. Only classify its
+  // standalone preview-style user agent as a bot, not a person's actual tap.
+  const isWhatsAppPreview = /whatsapp\/\d/i.test(userAgent) && !/android|iphone|ipad|mobile/i.test(userAgent);
+  const isBot = botPattern.test(userAgent) || isWhatsAppPreview;
   const ip = context.ip ?? "";
   const visitorHash = ip ? await makeVisitorHash(ip, userAgent, hashSecret) : null;
   const referrer = request.headers.get("referer");
