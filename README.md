@@ -90,13 +90,13 @@ order by event_id, clicks desc;
 ```
 
 ## Phase 2 admin dashboard
-1. Run [sql/phase2_admin_stats.sql](sql/phase2_admin_stats.sql) in the Supabase SQL Editor after the Phase 1 schema.
+1. Run [sql/phase2_event_image.sql](sql/phase2_event_image.sql) and [sql/phase2_admin_stats.sql](sql/phase2_admin_stats.sql) in the Supabase SQL Editor after the Phase 1 schema.
 2. Add `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` to the Netlify site's environment variables with the Functions scope. Mark both as secret. Use a strong password and a separate random session secret (for example, generate it locally with `openssl rand -hex 32`).
 3. Keep all four server-side variables private: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD`, and `ADMIN_SESSION_SECRET`.
 4. Redeploy the Netlify site, then visit `/admin`.
 5. Create an event and test each generated source link. Editing an event keeps its existing slug; archiving makes the tracked redirect inactive.
 
-The dashboard's statistics are aggregated in Postgres by a restricted function. Daily unique visitors are based on the Phase 1 daily visitor hash, not lifetime identity.
+The dashboard's statistics are aggregated in Postgres by a restricted function. Visitor-days are based on the Phase 1 daily visitor hash. The same person can count once on different days; this is not a lifetime unique-person metric.
 
 ## Phase boundary
 Phase 1 and Phase 2 are included in this repository. Automated Ticketmaster discovery, richer reports and AI caption drafting remain out of scope until the current phases are deployed and tested.
