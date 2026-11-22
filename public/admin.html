@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#102b22">
+  <title>Admin | OurCityVibe Tracker</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="topbar">
+      <a class="brand" href="/"><span class="brand-mark">OCV</span><span>OurCityVibe</span></a>
+      <div class="admin-actions"><span class="status"><span></span> Admin workspace</span><button id="logoutBtn" class="quiet-button" hidden>Sign out</button></div>
+    </header>
+    <section id="loginPanel" class="login-panel">
+      <p class="eyebrow">RESTRICTED ACCESS</p>
+      <h1>Admin sign in</h1>
+      <p class="muted">Sign in to manage event links and promotion tracking.</p>
+      <form id="loginForm" class="panel-form">
+        <label for="password">Admin password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button class="primary-button" type="submit">Continue</button>
+        <p id="loginMessage" class="message" role="status"></p>
+      </form>
+    </section>
+    <section id="dashboardPanel" hidden>
+      <div class="dashboard-heading"><div><p class="eyebrow">EVENT MANAGEMENT</p><h1>Promotion dashboard</h1><p class="muted">Create tracked links and manage the events you promote.</p></div><button id="refreshBtn" class="quiet-button">Refresh</button></div>
+      <div class="dashboard-grid">
+        <section class="admin-card">
+          <h2 id="formTitle">Add an event</h2>
+          <form id="eventForm" class="panel-form">
+            <input type="hidden" id="eventId">
+            <label for="title">Event title</label><input id="title" maxlength="180" required placeholder="e.g. Live Music Night">
+            <label for="ticketUrl">Ticket or event URL</label><input id="ticketUrl" type="url" required placeholder="https://…">
+            <div class="form-row"><div><label for="platform">Platform</label><select id="platform"><option value="other">Other</option><option value="ticketmaster">Ticketmaster</option><option value="eventbrite">Eventbrite</option><option value="posh">Posh</option></select></div><div><label for="city">City</label><input id="city" maxlength="100" placeholder="Abeokuta"></div></div>
+            <label for="eventDate">Event date</label><input id="eventDate" type="datetime-local">
+            <div class="form-buttons"><button class="primary-button" type="submit" id="saveBtn">Save event</button><button class="quiet-button" type="button" id="cancelEditBtn" hidden>Cancel</button></div>
+            <p id="formMessage" class="message" role="status"></p>
+          </form>
+        </section>
+        <section class="admin-card events-card">
+          <div class="events-heading"><div><h2>Your events</h2><p class="muted">Genuine clicks exclude detected bots and previews.</p></div><span id="eventCount" class="count-pill">0</span></div>
+          <div id="eventsList" class="events-list"><p class="muted">Sign in to load events.</p></div>
+        </section>
+      </div>
+    </section>
+    <footer><span>OURCITYVIBE</span><span>Event Promo Tracker</span></footer>
+  </main>
+  <script src="/admin.js" defer></script>
+</body>
+</html>
