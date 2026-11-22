@@ -120,16 +120,9 @@ exports.handler = async (event) => {
   try {
     if (action === "events" && event.httpMethod === "GET") {
       const events = await supabase(config, "events?select=id,title,ticket_url,platform,city,event_date,slug,status,created_at&order=created_at.desc");
-      const clicks = await supabase(config, "clicks?select=event_id,visitor_hash,is_bot");
-      const stats = new Map();
-      for (const click of clicks || []) {
-        if (click.is_bot) continue;
-        const item = stats.get(click.event_id) || { genuine_clicks: 0, visitors: new Set() };
-        item.genuine_clicks++;
-        if (click.visitor_hash) item.visitors.add(click.visitor_hash);
-        stats.set(click.event_id, item);
-      }
-      return json(200, { events: events.map((item) => ({ ...item, genuine_clicks: stats.get(item.id)?.genuine_clicks || 0, unique_visitors: stats.get(item.id)?.visitors.size || 0 })) });
+      const statsRows = await supabase(config, "rpc/admin_event_click_stats", { method: "POST", body: "{}" });
+      const stats = new Map((statsRows || []).map((item) => [item.event_id, item]));
+      return json(200, { events: events.map((item) => ({ ...item, genuine_clicks: Number(stats.get(item.id)?.genuine_clicks || 0), unique_visitors: Number(stats.get(item.id)?.unique_visitors || 0) })) });
     }
     if (action === "event" && event.httpMethod === "GET") {
       const id = event.queryStringParameters?.id || "";
