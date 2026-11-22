@@ -103,6 +103,7 @@ eventForm.addEventListener("submit", async (event) => {
     platform: document.querySelector("#platform").value,
     city: document.querySelector("#city").value.trim() || null,
     event_date: document.querySelector("#eventDate").value ? new Date(document.querySelector("#eventDate").value).toISOString() : null,
+    image_url: document.querySelector("#imageUrl").value.trim() || null,
   };
   try {
     await api("/api/admin?action=" + (id ? "update" : "create"), { method: "POST", body: JSON.stringify(id ? { ...payload, id } : payload) });
@@ -137,6 +138,7 @@ eventsList.addEventListener("click", async (event) => {
       document.querySelector("#platform").value = item.platform;
       document.querySelector("#city").value = item.city || "";
       document.querySelector("#eventDate").value = item.event_date ? new Date(item.event_date).toISOString().slice(0,16) : "";
+      document.querySelector("#imageUrl").value = item.image_url || "";
       document.querySelector("#formTitle").textContent = "Edit event";
       saveBtn.textContent = "Update event";
       document.querySelector("#cancelEditBtn").hidden = false;
