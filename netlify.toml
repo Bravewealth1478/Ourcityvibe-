@@ -1,3 +1,14 @@
 [build]
   publish = "public"
   edge_functions = "netlify/edge-functions"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/admin"
+  to = "/.netlify/functions/admin"
+  status = 200
