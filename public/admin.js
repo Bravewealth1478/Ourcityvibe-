@@ -60,7 +60,7 @@ function renderEvents(events) {
     const linkButtons = sourceNames.map((src) => `<div class="link-copy"><span>${src}</span><button type="button" data-copy="${base}?src=${src}">Copy</button></div>`).join("");
     return `<article class="event-item" data-event-id="${escapeHtml(event.id)}">
       <div class="event-top"><div><h3>${escapeHtml(event.title)}</h3><div class="event-meta">${escapeHtml(event.city || "City not set")} · ${escapeHtml(event.platform)} · ${formatDate(event.event_date)}</div><div class="event-meta">/${escapeHtml(event.slug)} · ${escapeHtml(event.status)}</div></div></div>
-      <div class="event-stats">${Number(event.genuine_clicks || 0).toLocaleString()} genuine clicks <span style="color:#a6b5ab">·</span> ${Number(event.unique_visitors || 0).toLocaleString()} daily unique visitors</div>
+      <div class="event-stats">${Number(event.genuine_clicks || 0).toLocaleString()} genuine clicks <span style="color:#a6b5ab">·</span> ${Number(event.unique_visitors || 0).toLocaleString()} visitor-days</div>
       <div class="event-controls"><button class="small-button accent" type="button" data-toggle-links>Tracked links</button><button class="small-button" type="button" data-edit="${escapeHtml(event.id)}">Edit</button>${event.status === "active" ? `<button class="small-button" type="button" data-archive="${escapeHtml(event.id)}">Archive</button>` : ""}</div>
       <div class="links-panel" hidden>${linkButtons}</div>
     </article>`;
