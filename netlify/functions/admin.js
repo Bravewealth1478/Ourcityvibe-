@@ -98,7 +98,12 @@ function validateEvent(body, creating) {
   const city = body.city == null ? null : String(body.city).trim().slice(0, 100) || null;
   const eventDate = body.event_date || null;
   if (eventDate && !Number.isFinite(Date.parse(eventDate))) throw new Error("Enter a valid event date.");
-  return { title, ticket_url: parsed.toString(), platform, city, event_date: eventDate, ...(creating ? {} : {}) };
+  let imageUrl = null;
+  if (body.image_url) {
+    try { const image = new URL(String(body.image_url)); if (!["http:", "https:"].includes(image.protocol)) throw new Error(); imageUrl = image.toString(); }
+    catch { throw new Error("Enter a valid image URL or leave it blank."); }
+  }
+  return { title, ticket_url: parsed.toString(), platform, city, event_date: eventDate, image_url: imageUrl };
 }
 exports.handler = async (event) => {
   let config;
@@ -119,7 +124,7 @@ exports.handler = async (event) => {
   if (action === "me" && event.httpMethod === "GET") return json(200, { authenticated: true });
   try {
     if (action === "events" && event.httpMethod === "GET") {
-      const events = await supabase(config, "events?select=id,title,ticket_url,platform,city,event_date,slug,status,created_at&order=created_at.desc");
+      const events = await supabase(config, "events?select=id,title,ticket_url,platform,city,event_date,image_url,slug,status,created_at&order=created_at.desc");
       const statsRows = await supabase(config, "rpc/admin_event_click_stats", { method: "POST", body: "{}" });
       const stats = new Map((statsRows || []).map((item) => [item.event_id, item]));
       return json(200, { events: events.map((item) => ({ ...item, genuine_clicks: Number(stats.get(item.id)?.genuine_clicks || 0), unique_visitors: Number(stats.get(item.id)?.unique_visitors || 0) })) });
@@ -127,7 +132,7 @@ exports.handler = async (event) => {
     if (action === "event" && event.httpMethod === "GET") {
       const id = event.queryStringParameters?.id || "";
       if (!/^[0-9a-f-]{36}$/i.test(id)) return json(400, { error: "Invalid event id." });
-      const rows = await supabase(config, `events?select=id,title,ticket_url,platform,city,event_date,slug,status&id=eq.${id}&limit=1`);
+      const rows = await supabase(config, `events?select=id,title,ticket_url,platform,city,event_date,image_url,slug,status&id=eq.${id}&limit=1`);
       if (!rows.length) return json(404, { error: "Event not found." });
       return json(200, { event: rows[0] });
     }
