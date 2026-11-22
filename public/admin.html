@@ -36,6 +36,7 @@
             <label for="ticketUrl">Ticket or event URL</label><input id="ticketUrl" type="url" required placeholder="https://…">
             <div class="form-row"><div><label for="platform">Platform</label><select id="platform"><option value="other">Other</option><option value="ticketmaster">Ticketmaster</option><option value="eventbrite">Eventbrite</option><option value="posh">Posh</option></select></div><div><label for="city">City</label><input id="city" maxlength="100" placeholder="Abeokuta"></div></div>
             <label for="eventDate">Event date</label><input id="eventDate" type="datetime-local">
+            <label for="imageUrl">Event image URL (optional)</label><input id="imageUrl" type="url" placeholder="https://…">
             <div class="form-buttons"><button class="primary-button" type="submit" id="saveBtn">Save event</button><button class="quiet-button" type="button" id="cancelEditBtn" hidden>Cancel</button></div>
             <p id="formMessage" class="message" role="status"></p>
           </form>
