@@ -107,5 +107,16 @@ Run [sql/phase3_multisource_discovery.sql](sql/phase3_multisource_discovery.sql)
 
 All three discovery tables have RLS enabled, no privileges for `anon` or `authenticated`, and server-only `service_role` grants. Imported candidates default to `pending`; they do not create active tracked links automatically. The schema is a foundation only: source adapters, duplicate matching, approval UI, popularity scoring and scheduled collection are subsequent Phase 3 steps.
 
+## Phase 3.2 source adapter layer
+The first adapter module is [api/discovery/adapters.js](api/discovery/adapters.js). It provides normalisation and parsers for:
+- JSON APIs, including an optional `config.items_path` for nested event arrays.
+- RSS and Atom feeds.
+- iCalendar feeds (`VEVENT` records).
+- Website and directory pages that publish Schema.org Event JSON-LD.
+
+The adapters return a common event candidate shape. They do not publish or approve events. Collection is bounded by a 12-second request timeout and 2 MB response limit, follows at most three redirects, and rejects obvious private/reserved host targets after DNS resolution. Before enabling arbitrary user-supplied source URLs in a live admin workflow, the fetch layer still needs production-grade DNS pinning/SSRF hardening and source-specific permission checks. iCalendar timezone handling and provider-specific API field mappings will be refined as sources are onboarded.
+
+No source is activated automatically by this module. A source must be configured and enabled by an administrator in a later dashboard step.
+
 ## Phase boundary
 Phase 1 and Phase 2 remain in place. Phase 3 is being implemented in stages. Phase 4 reporting and Phase 5 AI-assisted caption drafting remain out of scope until Phase 3 is complete and tested.
