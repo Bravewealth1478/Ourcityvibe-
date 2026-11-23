@@ -8,6 +8,8 @@ const formMessage = document.querySelector("#formMessage");
 const eventsList = document.querySelector("#eventsList");
 const saveBtn = document.querySelector("#saveBtn");
 const sourceNames = ["instagram", "tiktok", "whatsapp", "x", "facebook"];
+let stopCollectionRequested = false;
+let collectionRunning = false;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -86,43 +88,58 @@ function renderSources(sources) {
   </article>`).join("");
 }
 async function runCollection(sourceId = null) {
+  if (collectionRunning) return;
+  collectionRunning = true;
+  stopCollectionRequested = false;
   const button = sourceId
     ? document.querySelector('[data-source-run="' + sourceId + '"]')
-    : (document.querySelector("#fetchEventsBtn") || document.querySelector("#collectAllBtn"));
+    : document.querySelector("#fetchEventsBtn");
+  const stopButton = document.querySelector("#stopFetchBtn");
   const messageNode = document.querySelector("#collectionMessage");
   const summaryNode = document.querySelector("#fetchSummary");
   if (button) button.disabled = true;
+  if (stopButton) { stopButton.hidden = false; stopButton.disabled = false; stopButton.textContent = "Stop after current source"; }
   document.querySelector("#collectionResults").innerHTML = "";
-  if (summaryNode) summaryNode.textContent = "Fetching events. This can take a little while…";
   const allResults = [];
+  let offset = 0;
+  const totalSources = sourceId ? 1 : Number(document.querySelector("#sourceCount")?.textContent || 0);
   try {
-    let offset = 0;
     let more = true;
-    while (more) {
-      message(messageNode, sourceId ? "Collecting from selected source…" : "Collecting enabled sources… " + (offset + 1) + " onward");
+    while (more && !stopCollectionRequested) {
+      const position = allResults.length + 1;
+      const status = sourceId ? "Collecting selected source…" : "Fetching source " + position + " of " + totalSources + "…";
+      if (summaryNode) summaryNode.textContent = status;
+      message(messageNode, status);
       const payload = sourceId ? { source_id: sourceId } : { offset };
       const data = await api("/api/admin?action=collect", { method: "POST", body: JSON.stringify(payload) });
       const results = data.results || [];
-      if (data.message && summaryNode) summaryNode.textContent = data.message;
       allResults.push(...results);
       document.querySelector("#collectionResults").innerHTML = allResults.map(item => `<article class="collection-result">
         <strong>${escapeHtml(item.source_name)}</strong><span class="source-state ${item.status === "succeeded" ? "enabled" : ""}">${escapeHtml(item.status)}</span>
         <p>${item.items_seen} seen · ${item.items_created} new · ${item.items_updated} refreshed · ${item.duplicates_found} duplicates</p>
         ${item.error ? `<p class="source-error">${escapeHtml(item.error)}</p>` : ""}
       </article>`).join("");
-      more = !sourceId && results.length === 3;
+      more = !sourceId && results.length === 1;
       offset += results.length;
       if (!results.length) more = false;
     }
     const total = allResults.reduce((sum, item) => sum + item.items_created, 0);
     const failed = allResults.filter(item => item.status !== "succeeded").length;
-    const finalText = "Finished. " + allResults.length + " source(s) checked, " + total + " new candidate(s) added to review." + (failed ? " " + failed + " source(s) reported errors." : "");
-    message(messageNode, finalText, failed === 0);
-    if (summaryNode && allResults.length) summaryNode.textContent = finalText;
-    if (summaryNode && !allResults.length) summaryNode.textContent = "No discovery sources are configured yet. Open Advanced source settings to add feeds.";
-    await loadSources();
-  } catch (error) { message(messageNode, error.message); }
-  finally { if (button) button.disabled = false; }
+    const stopped = stopCollectionRequested && more;
+    const finalText = stopped
+      ? "Stopped after " + allResults.length + " source(s). " + total + " new candidate(s) added. Click Fetch Events to continue."
+      : "Finished. " + allResults.length + " source(s) checked, " + total + " new candidate(s) added to review." + (failed ? " " + failed + " source(s) reported errors." : "");
+    message(messageNode, finalText, !failed && !stopped);
+    if (summaryNode) summaryNode.textContent = finalText;
+    await Promise.all([loadSources(), loadCandidates()]);
+  } catch (error) {
+    message(messageNode, "Collection stopped because the request failed: " + error.message);
+    if (summaryNode) summaryNode.textContent = "Collection stopped. " + allResults.length + " source(s) completed before the request failed.";
+  } finally {
+    collectionRunning = false;
+    if (button) button.disabled = false;
+    if (stopButton) stopButton.hidden = true;
+  }
 }
 function renderCandidates(candidates) {
   document.querySelector("#candidateCount").textContent = String(candidates.length);
@@ -229,6 +246,7 @@ document.querySelector("#sourceForm").addEventListener("submit", async (event) =
 });
 document.querySelector("#collectAllBtn").addEventListener("click", () => runCollection());
 document.querySelector("#fetchEventsBtn").addEventListener("click", () => runCollection());
+document.querySelector("#stopFetchBtn").addEventListener("click", () => { stopCollectionRequested = true; document.querySelector("#stopFetchBtn").disabled = true; document.querySelector("#stopFetchBtn").textContent = "Stopping…"; });
 document.querySelector("#refreshCandidatesBtn").addEventListener("click", loadCandidates);
 document.querySelector("#candidatesList").addEventListener("click", async (event) => {
   const approve = event.target.closest("[data-candidate-approve]");
