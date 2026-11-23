@@ -1,4 +1,5 @@
-const { createHmac, timingSafeEqual, randomBytes } = require("node:crypto");
+const { createHmac, timingSafeEqual, randomBytes, createHash } = require("node:crypto");
+const { collectFromSource } = require("../../api/discovery/adapters");
 
 const COOKIE_NAME = "ocv_admin_session";
 const SESSION_SECONDS = 60 * 60 * 8;
@@ -151,6 +152,64 @@ exports.handler = async (event) => {
     if (!checkOrigin(event)) return json(403, { error: "Request origin could not be verified." });
     let body;
     try { body = JSON.parse(event.body || "{}"); } catch { return json(400, { error: "Invalid request." }); }
+    if (action === "collect" && event.httpMethod === "POST") {
+      const sourceId = body.source_id ? String(body.source_id) : null;
+      if (sourceId && !/^[0-9a-f-]{36}$/i.test(sourceId)) return json(400, { error: "Invalid source id." });
+      const sourceFilter = sourceId ? "&id=eq." + sourceId : "";
+      const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config&id=not.is.null" + sourceFilter + "&enabled=eq.true&order=created_at.asc");
+      if (!sources.length) return json(404, { error: "No enabled sources were found." });
+      const summaries = [];
+      for (const source of sources.slice(0, 15)) {
+        const runRows = await supabase(config, "discovery_runs?select=id", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify({ source_id: source.id, trigger_type: "manual", status: "running" }) });
+        const runId = runRows[0].id;
+        let seen = 0, created = 0, updated = 0, duplicates = 0, runError = null;
+        try {
+          const result = await collectFromSource(source);
+          for (const candidate of result.events.slice(0, 500)) {
+            seen++;
+            const fingerprintBase = [candidate.title, candidate.event_date || "", candidate.city || "", candidate.country_code || ""].join("|").toLowerCase().replace(/\s+/g, " ").trim();
+            const fingerprint = createHash("sha256").update(fingerprintBase).digest("hex");
+            const external = candidate.external_id ? String(candidate.external_id).slice(0, 500) : null;
+            let existing = [];
+            if (external) existing = await supabase(config, "discovered_events?select=id,review_status&source_id=eq." + source.id + "&external_id=eq." + encodeURIComponent(external) + "&limit=1");
+            if (!existing.length) existing = await supabase(config, "discovered_events?select=id,review_status&source_id=eq." + source.id + "&fingerprint=eq." + fingerprint + "&limit=1");
+            const payload = {
+              source_id: source.id, discovery_run_id: runId, external_id: external,
+              title: candidate.title, description: candidate.description, category: candidate.category,
+              organizer_name: candidate.organizer_name, venue_name: candidate.venue_name, address: candidate.address,
+              city: candidate.city, region: candidate.region, country: candidate.country, country_code: candidate.country_code,
+              timezone: candidate.timezone, event_date: candidate.event_date, end_date: candidate.end_date,
+              ticket_url: candidate.ticket_url, source_url: candidate.source_url, image_url: candidate.image_url,
+              currency: candidate.currency, price_min: candidate.price_min, price_max: candidate.price_max,
+              popularity_signals: candidate.popularity_signals || {}, fingerprint,
+              source_payload: JSON.parse(JSON.stringify(candidate.source_payload || {}).slice(0, 50000)),
+              last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString()
+            };
+            if (existing.length) {
+              await supabase(config, "discovered_events?id=eq." + existing[0].id, { method: "PATCH", body: JSON.stringify(payload) });
+              updated++;
+              continue;
+            }
+            const crossSource = await supabase(config, "discovered_events?select=id,review_status&fingerprint=eq." + fingerprint + "&limit=1");
+            if (crossSource.length) {
+              payload.review_status = "duplicate";
+              payload.duplicate_of = crossSource[0].id;
+              duplicates++;
+            }
+            await supabase(config, "discovered_events", { method: "POST", body: JSON.stringify(payload), headers: { prefer: "return=minimal" } });
+            created++;
+          }
+          await supabase(config, "discovery_runs?id=eq." + runId, { method: "PATCH", body: JSON.stringify({ status: "succeeded", finished_at: new Date().toISOString(), items_seen: seen, items_created: created, items_updated: updated, duplicates_found: duplicates, metadata: { fetched_url: result.fetched_url, content_type: result.content_type } }) });
+          await supabase(config, "event_sources?id=eq." + source.id, { method: "PATCH", body: JSON.stringify({ last_checked_at: new Date().toISOString(), last_success_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() }) });
+        } catch (error) {
+          runError = String(error.message || "Collection failed").slice(0, 1000);
+          await supabase(config, "discovery_runs?id=eq." + runId, { method: "PATCH", body: JSON.stringify({ status: seen ? "partial" : "failed", finished_at: new Date().toISOString(), items_seen: seen, items_created: created, items_updated: updated, duplicates_found: duplicates, error_message: runError }) });
+          await supabase(config, "event_sources?id=eq." + source.id, { method: "PATCH", body: JSON.stringify({ last_checked_at: new Date().toISOString(), last_error: runError, updated_at: new Date().toISOString() }) });
+        }
+        summaries.push({ source_id: source.id, source_name: source.name, status: runError ? "failed" : "succeeded", items_seen: seen, items_created: created, items_updated: updated, duplicates_found: duplicates, error: runError });
+      }
+      return json(200, { results: summaries });
+    }
     if (action === "source-create" || action === "source-update") {
       const id = body.id;
       if (action === "source-update" && !/^[0-9a-f-]{36}$/i.test(id || "")) return json(400, { error: "Invalid source id." });
