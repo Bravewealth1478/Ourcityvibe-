@@ -11,7 +11,7 @@
 <body>
   <main class="admin-shell">
     <header class="topbar">
-      <a class="brand" href="/"><span class="brand-mark">OCV</span><span>OurCityVibe</span></a>
+      <a class="brand" href="/" aria-label="OurCityVibe home"><img src="/ourcityvibe-logo.svg" alt="OurCityVibe"></a>
       <div class="admin-actions"><span class="status"><span></span> Admin workspace</span><button id="logoutBtn" class="quiet-button" hidden>Sign out</button></div>
     </header>
     <section id="loginPanel" class="login-panel">
@@ -46,6 +46,23 @@
           <div id="eventsList" class="events-list"><p class="muted">Sign in to load events.</p></div>
         </section>
       </div>
+      <section class="admin-card sources-card">
+        <div class="events-heading"><div><h2>Event discovery sources</h2><p class="muted">Manage international and local feeds. Sources are registered here; importing and publishing remain separate steps.</p></div><span id="sourceCount" class="count-pill">0</span></div>
+        <form id="sourceForm" class="source-form">
+          <input type="hidden" id="sourceId">
+          <div class="source-grid">
+            <div><label for="sourceName">Source name</label><input id="sourceName" maxlength="120" required placeholder="e.g. City events calendar"></div>
+            <div><label for="sourceType">Source type</label><select id="sourceType"><option value="rss">RSS feed</option><option value="api">JSON API</option><option value="ical">iCalendar</option><option value="website">Website (structured data)</option><option value="directory">Event directory</option><option value="manual">Manual source</option></select></div>
+            <div class="source-url"><label for="sourceUrl">Feed or website URL</label><input id="sourceUrl" type="url" required placeholder="https://example.com/events"></div>
+            <div><label for="sourceScope">Coverage</label><select id="sourceScope"><option value="global">Global</option><option value="country">Country</option><option value="regional">Regional</option><option value="local">Local</option></select></div>
+            <div><label for="sourceCountries">Country codes</label><input id="sourceCountries" placeholder="NG, GB, US"></div>
+            <div class="source-config"><label for="sourceConfig">Configuration JSON (optional)</label><textarea id="sourceConfig" rows="2" placeholder='{"items_path":"events"}'></textarea></div>
+          </div>
+          <div class="form-buttons"><button class="primary-button" type="submit" id="sourceSaveBtn">Add source</button><button class="quiet-button" type="button" id="sourceCancelBtn" hidden>Cancel edit</button></div>
+          <p id="sourceMessage" class="message" role="status"></p>
+        </form>
+        <div id="sourcesList" class="sources-list"><p class="muted">Sign in to manage discovery sources.</p></div>
+      </section>
     </section>
     <footer><span>OURCITYVIBE</span><span>Event Promo Tracker</span></footer>
   </main>
