@@ -69,7 +69,8 @@ module.exports = async function trackEvent(req, res) {
   }
 
   if (!lookup.ok) {
-    console.error("Event lookup failed:", lookup.status);
+    const detail = await lookup.text();
+    console.error("Event lookup failed:", lookup.status, "keyMode:", serviceKey.startsWith("sb_secret_") ? "secret-api-key" : "legacy-jwt", "response:", detail.slice(0, 500));
     return page(res, "This link is temporarily unavailable.", 503);
   }
 
