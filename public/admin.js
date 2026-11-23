@@ -80,9 +80,31 @@ function renderSources(sources) {
   if (!sources.length) { node.innerHTML = '<div class="empty-state">No discovery sources have been added yet.</div>'; return; }
   node.innerHTML = sources.map((source) => `<article class="source-item" data-source-id="${escapeHtml(source.id)}">
     <div class="source-info"><div><h3>${escapeHtml(source.name)}</h3><p>${escapeHtml(source.source_type.toUpperCase())} · ${escapeHtml(source.country_scope)} · ${escapeHtml((source.country_codes || []).join(", ") || "All countries")}</p><a href="${escapeHtml(source.base_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.base_url)}</a></div><span class="source-state ${source.enabled ? "enabled" : ""}">${source.enabled ? "Enabled" : "Disabled"}</span></div>
-    <div class="source-actions"><button class="small-button" type="button" data-source-edit="${escapeHtml(source.id)}">Edit</button><button class="small-button" type="button" data-source-toggle="${escapeHtml(source.id)}" data-enabled="${source.enabled ? "true" : "false"}">${source.enabled ? "Disable" : "Enable"}</button></div>
+    <div class="source-actions"><button class="small-button accent" type="button" data-source-run="${escapeHtml(source.id)}" ${source.enabled ? "" : "disabled"}>Collect now</button><button class="small-button" type="button" data-source-edit="${escapeHtml(source.id)}">Edit</button><button class="small-button" type="button" data-source-toggle="${escapeHtml(source.id)}" data-enabled="${source.enabled ? "true" : "false"}">${source.enabled ? "Disable" : "Enable"}</button></div>
     ${source.last_error ? `<p class="source-error">Last collection error: ${escapeHtml(source.last_error)}</p>` : ""}
   </article>`).join("");
+}
+async function runCollection(sourceId = null) {
+  const button = sourceId
+    ? document.querySelector('[data-source-run="' + sourceId + '"]')
+    : document.querySelector("#collectAllBtn");
+  const messageNode = document.querySelector("#collectionMessage");
+  if (button) button.disabled = true;
+  message(messageNode, sourceId ? "Collecting from selected source…" : "Collecting from enabled sources…");
+  document.querySelector("#collectionResults").innerHTML = "";
+  try {
+    const data = await api("/api/admin?action=collect", { method: "POST", body: JSON.stringify(sourceId ? { source_id: sourceId } : {}) });
+    const results = data.results || [];
+    document.querySelector("#collectionResults").innerHTML = results.map(item => `<article class="collection-result">
+      <strong>${escapeHtml(item.source_name)}</strong><span class="source-state ${item.status === "succeeded" ? "enabled" : ""}">${escapeHtml(item.status)}</span>
+      <p>${item.items_seen} seen · ${item.items_created} new · ${item.items_updated} refreshed · ${item.duplicates_found} duplicates</p>
+      ${item.error ? `<p class="source-error">${escapeHtml(item.error)}</p>` : ""}
+    </article>`).join("");
+    const total = results.reduce((sum, item) => sum + item.items_created, 0);
+    message(messageNode, "Collection finished. " + total + " new candidate(s) added to review.", true);
+    await loadSources();
+  } catch (error) { message(messageNode, error.message); }
+  finally { if (button) button.disabled = false; }
 }
 async function loadSources() {
   const node = document.querySelector("#sourcesList");
@@ -159,6 +181,7 @@ document.querySelector("#sourceForm").addEventListener("submit", async (event) =
   } catch (error) { message(document.querySelector("#sourceMessage"), error.message); }
   finally { button.disabled = false; }
 });
+document.querySelector("#collectAllBtn").addEventListener("click", () => runCollection());
 document.querySelector("#sourceCancelBtn").addEventListener("click", clearSourceForm);
 document.querySelector("#sourcesList").addEventListener("click", async (event) => {
   const edit = event.target.closest("[data-source-edit]");
@@ -180,6 +203,8 @@ document.querySelector("#sourcesList").addEventListener("click", async (event) =
     } catch (error) { alert(error.message); }
     return;
   }
+  const run = event.target.closest("[data-source-run]");
+  if (run) { await runCollection(run.dataset.sourceRun); return; }
   const toggle = event.target.closest("[data-source-toggle]");
   if (toggle) {
     try {
