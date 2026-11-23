@@ -128,6 +128,13 @@ exports.handler = async (event) => {
   if (action === "logout") return json(200, { ok: true }, { "set-cookie": clearCookie() });
   if (!validSession(event, config.secret)) return json(401, { error: "Please sign in to continue." });
   if (action === "me" && event.httpMethod === "GET") return json(200, { authenticated: true });
+  if (action === "candidates" && event.httpMethod === "GET") {
+    try {
+      const status = ["pending","duplicate","rejected","approved"].includes(event.queryStringParameters?.status) ? event.queryStringParameters.status : "pending";
+      const candidates = await supabase(config, "discovered_events?select=id,source_id,discovery_run_id,title,description,category,organizer_name,venue_name,address,city,region,country,country_code,event_date,end_date,ticket_url,source_url,image_url,currency,price_min,price_max,popularity_score,review_status,duplicate_of,review_note,approved_event_id,first_seen_at,last_seen_at,event_sources(name,source_type)&review_status=eq." + status + "&order=event_date.asc.nullslast,created_at.desc&limit=100");
+      return json(200, { candidates });
+    } catch (error) { return json(500, { error: error.message }); }
+  }
   if (action === "sources" && event.httpMethod === "GET") {
     try {
       const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config,last_checked_at,last_success_at,last_error,created_at,updated_at&order=created_at.desc");
@@ -210,6 +217,39 @@ exports.handler = async (event) => {
         summaries.push({ source_id: source.id, source_name: source.name, status: runError ? "failed" : "succeeded", items_seen: seen, items_created: created, items_updated: updated, duplicates_found: duplicates, error: runError });
       }
       return json(200, { results: summaries });
+    }
+    if (action === "candidate-approve") {
+      if (!/^[0-9a-f-]{36}$/i.test(body.id || "")) return json(400, { error: "Invalid candidate id." });
+      const candidates = await supabase(config, "discovered_events?select=*&id=eq." + body.id + "&limit=1");
+      if (!candidates.length) return json(404, { error: "Candidate not found." });
+      const candidate = candidates[0];
+      if (candidate.review_status !== "pending") return json(409, { error: "Only pending candidates can be approved." });
+      let ticketUrl;
+      try { ticketUrl = new URL(String(body.ticket_url || candidate.ticket_url || "")); } catch { return json(400, { error: "Add a valid event or ticket URL before approval." }); }
+      if (!["http:","https:"].includes(ticketUrl.protocol)) return json(400, { error: "Ticket URL must use HTTP or HTTPS." });
+      const platform = /ticketmaster/i.test(ticketUrl.hostname) ? "ticketmaster" : /eventbrite/i.test(ticketUrl.hostname) ? "eventbrite" : /posh/i.test(ticketUrl.hostname) ? "posh" : "other";
+      const slug = await uniqueSlug(config, candidate.title);
+      const eventValues = {
+        title: candidate.title, ticket_url: ticketUrl.toString(), platform, city: candidate.city,
+        event_date: candidate.event_date, image_url: candidate.image_url, slug, status: "active",
+        discovered_event_id: candidate.id, description: candidate.description, venue_name: candidate.venue_name,
+        region: candidate.region, country: candidate.country, country_code: candidate.country_code,
+        timezone: candidate.timezone, organizer_name: candidate.organizer_name, source_url: candidate.source_url
+      };
+      const created = await supabase(config, "events?select=id,title,slug,status", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify(eventValues) });
+      try {
+        await supabase(config, "discovered_events?id=eq." + candidate.id, { method: "PATCH", body: JSON.stringify({ ticket_url: ticketUrl.toString(), review_status: "approved", approved_event_id: created[0].id, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
+      } catch (error) {
+        await supabase(config, "events?id=eq." + created[0].id, { method: "PATCH", body: JSON.stringify({ status: "archived" }) });
+        throw error;
+      }
+      return json(201, { event: created[0] });
+    }
+    if (action === "candidate-reject") {
+      if (!/^[0-9a-f-]{36}$/i.test(body.id || "")) return json(400, { error: "Invalid candidate id." });
+      const rows = await supabase(config, "discovered_events?id=eq." + body.id + "&review_status=eq.pending&select=id,review_status", { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify({ review_status: "rejected", review_note: String(body.note || "").slice(0, 1000) || null, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
+      if (!rows.length) return json(404, { error: "Pending candidate not found." });
+      return json(200, { candidate: rows[0] });
     }
     if (action === "source-create" || action === "source-update") {
       const id = body.id;
