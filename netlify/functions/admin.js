@@ -164,7 +164,7 @@ exports.handler = async (event) => {
       if (sourceId && !/^[0-9a-f-]{36}$/i.test(sourceId)) return json(400, { error: "Invalid source id." });
       const sourceFilter = sourceId ? "&id=eq." + sourceId : "";
       const offset = Math.max(0, Math.min(10000, Number.parseInt(body.offset || "0", 10) || 0));
-      const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config&id=not.is.null" + sourceFilter + "&enabled=eq.true&source_type=neq.manual&order=created_at.asc&limit=3&offset." + offset);
+      const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config&id=not.is.null" + sourceFilter + "&enabled=eq.true&source_type=neq.manual&order=created_at.asc&limit=1&offset=" + offset);
       if (!sources.length) return json(200, { results: [], message: "No discovery sources are configured yet. Add your sources once in Advanced source settings, then Fetch Events will run them for you." });
       const summaries = [];
       for (const source of sources) {
