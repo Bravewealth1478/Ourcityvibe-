@@ -47,7 +47,7 @@
         </section>
       </div>
       <section class="admin-card sources-card">
-        <div class="events-heading"><div><h2>Event discovery sources</h2><p class="muted">Manage international and local feeds. Sources are registered here; importing and publishing remain separate steps.</p></div><span id="sourceCount" class="count-pill">0</span></div>
+        <div class="events-heading"><div><h2>Event discovery sources</h2><p class="muted">Manage international and local feeds. Sources are registered here; importing and publishing remain separate steps.</p></div><div class="source-heading-actions"><span id="sourceCount" class="count-pill">0</span><button id="collectAllBtn" class="primary-button" type="button">Run all enabled sources</button></div></div>
         <form id="sourceForm" class="source-form">
           <input type="hidden" id="sourceId">
           <div class="source-grid">
@@ -61,7 +61,7 @@
           <div class="form-buttons"><button class="primary-button" type="submit" id="sourceSaveBtn">Add source</button><button class="quiet-button" type="button" id="sourceCancelBtn" hidden>Cancel edit</button></div>
           <p id="sourceMessage" class="message" role="status"></p>
         </form>
-        <div id="sourcesList" class="sources-list"><p class="muted">Sign in to manage discovery sources.</p></div>
+        <p id="collectionMessage" class="message" role="status"></p><div id="collectionResults" class="collection-results"></div><div id="sourcesList" class="sources-list"><p class="muted">Sign in to manage discovery sources.</p></div>
       </section>
     </section>
     <footer><span>OURCITYVIBE</span><span>Event Promo Tracker</span></footer>
