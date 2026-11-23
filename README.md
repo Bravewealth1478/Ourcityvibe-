@@ -1,6 +1,6 @@
 # OurCityVibe Event Promo Tracker
 
-Phase 1 tracked links and click logging, plus Phase 2 password-protected event administration.
+Phase 1 tracked links and click logging, Phase 2 password-protected event administration, and the Phase 3 multi-source event discovery foundation.
 
 ## Stack
 - Static HTML/CSS frontend
@@ -14,7 +14,7 @@ Phase 1 tracked links and click logging, plus Phase 2 password-protected event a
 - Save known bot and preview requests with `is_bot=true`; exclude them from genuine click totals.
 - Do not store raw IP addresses or user-agent strings.
 - Phase 2 adds a protected admin dashboard for event creation, editing, archiving and tracked-link copying.
-- Automated event discovery remains out of scope.
+- Phase 3.1 adds private tables for event sources, discovery runs, and imported event candidates. Imported candidates remain separate from live events until administrator approval.
 
 ## Supabase setup
 1. Create or select a Supabase project.
@@ -98,5 +98,14 @@ order by event_id, clicks desc;
 
 The dashboard's statistics are aggregated in Postgres by a restricted function. Visitor-days are based on the Phase 1 daily visitor hash. The same person can count once on different days; this is not a lifetime unique-person metric.
 
+## Phase 3.1 multi-source discovery foundation
+Run [sql/phase3_multisource_discovery.sql](sql/phase3_multisource_discovery.sql) after the Phase 1 and Phase 2 SQL files. It creates:
+- `event_sources`: source registry for APIs, RSS, iCal, websites, directories and manual feeds, with global or scoped coverage.
+- `discovery_runs`: import execution history and item counts.
+- `discovered_events`: normalised imported candidates, source provenance, location, dates, popularity signals, fingerprints and review status.
+- Optional metadata columns on `events` so approved imports can retain their provenance and event details.
+
+All three discovery tables have RLS enabled, no privileges for `anon` or `authenticated`, and server-only `service_role` grants. Imported candidates default to `pending`; they do not create active tracked links automatically. The schema is a foundation only: source adapters, duplicate matching, approval UI, popularity scoring and scheduled collection are subsequent Phase 3 steps.
+
 ## Phase boundary
-Phase 1 and Phase 2 are included in this repository. Automated Ticketmaster discovery, richer reports and AI caption drafting remain out of scope until the current phases are deployed and tested.
+Phase 1 and Phase 2 remain in place. Phase 3 is being implemented in stages. Phase 4 reporting and Phase 5 AI-assisted caption drafting remain out of scope until Phase 3 is complete and tested.
