@@ -1,6 +1,8 @@
 "use strict";
 const dns = require("node:dns/promises");
 const net = require("node:net");
+const http = require("node:http");
+const https = require("node:https");
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 12000;
@@ -142,51 +144,126 @@ function parseJsonApi(body, source) {
   return items.map(raw => normalise(raw, source, source.base_url)).filter(Boolean);
 }
 function blockedIp(ip) {
-  const v = net.isIP(ip);
-  if (v === 4) {
-    const [a,b] = ip.split(".").map(Number);
+  const family = net.isIP(ip);
+  if (family === 4) {
+    const [a,b,c] = ip.split(".").map(Number);
     return a === 0 || a === 10 || a === 127 || a >= 224 ||
-      (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 0 || b === 168)) ||
-      (a === 198 && (b === 18 || b === 19));
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 0 || b === 2 || b === 168)) ||
+      (a === 192 && b === 88 && c === 99) ||
+      (a === 198 && (b === 18 || b === 19 || b === 51)) ||
+      (a === 203 && b === 0 && c === 113) ||
+      (a === 255 && b === 255 && c === 255);
   }
-  if (v === 6) {
+  if (family === 6) {
     const s = ip.toLowerCase();
-    return s === "::" || s === "::1" || s.startsWith("fc") || s.startsWith("fd") ||
-      s.startsWith("fe8") || s.startsWith("fe9") || s.startsWith("fea") || s.startsWith("feb");
+    // Only globally-routable unicast space is accepted. This excludes
+    // loopback, link-local, unique-local, multicast, mapped and transition ranges.
+    if (!(s.startsWith("2") || s.startsWith("3"))) return true;
+    if (s.startsWith("2001:db8:") || s.startsWith("2001:10:") || s.startsWith("2001:20:")) return true;
+    return false;
   }
   return true;
 }
-async function assertPublicHost(value) {
+async function resolvePublicAddress(value) {
   const u = new URL(value);
-  if (!["http:", "https:"].includes(u.protocol)) throw new Error("Only HTTP and HTTPS sources are supported.");
   const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) throw new Error("Local network sources are not allowed.");
-  if (net.isIP(host)) { if (blockedIp(host)) throw new Error("Private or reserved network addresses are not allowed."); return; }
+  if (net.isIP(host)) {
+    if (blockedIp(host)) throw new Error("Private or reserved network addresses are not allowed.");
+    return { address: host, family: net.isIP(host) };
+  }
   const resolved = await dns.lookup(host, { all: true, verbatim: true });
   if (!resolved.length || resolved.some(x => blockedIp(x.address))) throw new Error("Source host resolves to a private or reserved network address.");
+  return resolved[0];
+}
+function requestPinned(value, resolved) {
+  const u = new URL(value);
+  const transport = u.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const options = {
+      protocol: u.protocol,
+      hostname: u.hostname,
+      port: u.port || undefined,
+      path: u.pathname + u.search,
+      method: "GET",
+      headers: {
+        "user-agent": UA,
+        accept: "application/json, application/rss+xml, application/atom+xml, text/calendar, application/xml, text/xml, text/html;q=0.9"
+      },
+      agent: false,
+      lookup: (_hostname, lookupOptions, callback) => {
+        if (lookupOptions && lookupOptions.all) callback(null, [resolved]);
+        else callback(null, resolved.address, resolved.family);
+      },
+      ...(u.protocol === "https:" ? { servername: u.hostname } : {})
+    };
+    const req = transport.request(options, response => {
+      const status = response.statusCode || 0;
+      if ([301,302,303,307,308].includes(status)) {
+        response.resume();
+        resolve({ status, location: response.headers.location || null });
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        response.resume();
+        resolve({ status });
+        return;
+      }
+      const length = Number(response.headers["content-length"] || 0);
+      if (length > MAX_BYTES) {
+        req.destroy(new Error("Source response exceeds the 2 MB limit."));
+        return;
+      }
+      const chunks = [];
+      let bytes = 0;
+      response.on("data", chunk => {
+        bytes += chunk.length;
+        if (bytes > MAX_BYTES) {
+          req.destroy(new Error("Source response exceeds the 2 MB limit."));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on("end", () => resolve({
+        status,
+        body: Buffer.concat(chunks).toString("utf8"),
+        contentType: String(response.headers["content-type"] || "").toLowerCase()
+      }));
+    });
+    req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error("Source request timed out.")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+function allowedContentType(sourceType, contentType) {
+  const type = contentType.split(";")[0].trim();
+  const allowed = {
+    api: ["application/json", "application/ld+json", "text/json", "text/plain"],
+    rss: ["application/rss+xml", "application/atom+xml", "application/xml", "text/xml"],
+    ical: ["text/calendar", "application/ics", "text/plain"],
+    website: ["text/html", "application/xhtml+xml"],
+    directory: ["text/html", "application/xhtml+xml"],
+  };
+  return (allowed[sourceType] || []).includes(type);
 }
 async function fetchSource(source) {
   let current = urlOf(source.base_url);
   if (!current) throw new Error("Source URL must be HTTP or HTTPS.");
   for (let i = 0; i <= 3; i++) {
-    await assertPublicHost(current);
-    const response = await fetch(current, {
-      redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { "user-agent": UA, accept: "application/json, application/rss+xml, application/atom+xml, text/calendar, application/xml, text/xml, text/html;q=0.9, */*;q=0.1" }
-    });
+    const resolved = await resolvePublicAddress(current);
+    const response = await requestPinned(current, resolved);
     if ([301,302,303,307,308].includes(response.status)) {
-      const location = response.headers.get("location");
-      if (!location || i === 3) throw new Error("Source redirected too many times or omitted its redirect target.");
-      current = urlOf(location, current);
+      if (!response.location || i === 3) throw new Error("Source redirected too many times or omitted its redirect target.");
+      current = urlOf(response.location, current);
       if (!current) throw new Error("Source returned an unsafe redirect URL.");
       continue;
     }
-    if (!response.ok) throw new Error("Source returned HTTP " + response.status + ".");
-    if (Number(response.headers.get("content-length") || 0) > MAX_BYTES) throw new Error("Source response exceeds the 2 MB limit.");
-    const buffer = await response.arrayBuffer();
-    if (buffer.byteLength > MAX_BYTES) throw new Error("Source response exceeds the 2 MB limit.");
-    return { body: new TextDecoder().decode(buffer), contentType: (response.headers.get("content-type") || "").toLowerCase(), finalUrl: current };
+    if (response.status < 200 || response.status >= 300) throw new Error("Source returned HTTP " + response.status + ".");
+    if (!allowedContentType(source.source_type, response.contentType)) throw new Error("Source returned an unsupported content type: " + (response.contentType || "missing") + ".");
+    return { body: response.body, contentType: response.contentType, finalUrl: current };
   }
   throw new Error("Unable to fetch source.");
 }
@@ -204,4 +281,4 @@ async function collectFromSource(source) {
   }
   return { events, fetched_url: fetched.finalUrl, content_type: fetched.contentType, fetched_at: new Date().toISOString() };
 }
-module.exports = { collectFromSource, parseJsonApi, parseRssAtom, parseIcal, parseJsonLd, normalise };
+module.exports = { collectFromSource, parseJsonApi, parseRssAtom, parseIcal, parseJsonLd, normalise, blockedIp, allowedContentType };
