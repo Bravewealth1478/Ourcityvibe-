@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 190" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 0 290 125" role="img" aria-labelledby="title">
 <title id="title">OurCityVibe</title>
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6a7ef"/><stop offset=".52" stop-color="#e58cda"/><stop offset="1" stop-color="#f4b1a9"/></linearGradient></defs>
 <path d="M255 28 C218 -2 157 10 153 57 C149 99 197 119 230 91 L291 38 C327 8 382 21 379 64 C376 108 324 119 291 91" fill="none" stroke="url(#g)" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="260" y="164" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="49" font-weight="700" text-anchor="middle" letter-spacing="-1.8">OurCityVibe</text>
 </svg>
