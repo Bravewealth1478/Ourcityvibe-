@@ -182,7 +182,7 @@ exports.handler = async (event) => {
               ticket_url: candidate.ticket_url, source_url: candidate.source_url, image_url: candidate.image_url,
               currency: candidate.currency, price_min: candidate.price_min, price_max: candidate.price_max,
               popularity_signals: candidate.popularity_signals || {}, fingerprint,
-              source_payload: JSON.parse(JSON.stringify(candidate.source_payload || {}).slice(0, 50000)),
+              source_payload: (() => { const raw = JSON.stringify(candidate.source_payload || {}); return raw.length <= 50000 ? (candidate.source_payload || {}) : { truncated: true, preview: raw.slice(0, 49000) }; })(),
               last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString()
             };
             if (existing.length) {
