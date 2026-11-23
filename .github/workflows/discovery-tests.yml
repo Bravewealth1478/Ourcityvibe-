@@ -1,0 +1,25 @@
+name: Discovery adapter tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/discovery/**"
+      - "test/**"
+      - ".github/workflows/discovery-tests.yml"
+  pull_request:
+    paths:
+      - "api/discovery/**"
+      - "test/**"
+      - ".github/workflows/discovery-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run discovery adapter tests
+        run: node --test test/discovery-adapters.test.js
