@@ -29,6 +29,7 @@ function showDashboard() {
   logoutBtn.hidden = false;
   loadEvents();
   loadSources();
+  loadCandidates();
 }
 function showLogin() {
   loginPanel.hidden = false;
@@ -117,6 +118,34 @@ async function runCollection(sourceId = null) {
   } catch (error) { message(messageNode, error.message); }
   finally { if (button) button.disabled = false; }
 }
+function renderCandidates(candidates) {
+  document.querySelector("#candidateCount").textContent = String(candidates.length);
+  const node = document.querySelector("#candidatesList");
+  if (!candidates.length) { node.innerHTML = '<div class="empty-state">No pending candidates. Run your enabled discovery sources to find events.</div>'; return; }
+  node.innerHTML = candidates.map(candidate => {
+    const source = candidate.event_sources || {};
+    return `<article class="candidate-item" data-candidate-id="${escapeHtml(candidate.id)}">
+      <div class="candidate-top">
+        <div><h3>${escapeHtml(candidate.title)}</h3><p>${escapeHtml([candidate.city,candidate.region,candidate.country].filter(Boolean).join(", ") || "Location not provided")} · ${escapeHtml(formatDate(candidate.event_date))}</p>
+        <p class="candidate-source">From ${escapeHtml(source.name || "Unknown source")} · ${escapeHtml(source.source_type || "source")}</p></div>
+        <span class="source-state enabled">Pending review</span>
+      </div>
+      ${candidate.image_url ? `<img class="candidate-image" src="${escapeHtml(candidate.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
+      ${candidate.description ? `<p class="candidate-description">${escapeHtml(candidate.description)}</p>` : ""}
+      <div class="candidate-meta">${escapeHtml([candidate.venue_name,candidate.organizer_name].filter(Boolean).join(" · ") || "Venue and organiser not provided")}</div>
+      ${candidate.source_url ? `<a class="candidate-link" href="${escapeHtml(candidate.source_url)}" target="_blank" rel="noopener noreferrer">View source listing</a>` : ""}
+      <label class="candidate-ticket-label" for="candidate-ticket-${escapeHtml(candidate.id)}">Ticket or official event URL</label>
+      <input class="candidate-ticket-input" id="candidate-ticket-${escapeHtml(candidate.id)}" type="url" value="${escapeHtml(candidate.ticket_url || "")}" placeholder="https://..." inputmode="url">
+      <div class="candidate-actions"><button class="primary-button" type="button" data-candidate-approve="${escapeHtml(candidate.id)}">Approve and create tracked event</button><button class="small-button" type="button" data-candidate-reject="${escapeHtml(candidate.id)}">Reject</button></div>
+    </article>`;
+  }).join("");
+}
+async function loadCandidates() {
+  const node = document.querySelector("#candidatesList");
+  node.innerHTML = '<p class="muted">Loading review queue…</p>';
+  try { const data = await api("/api/admin?action=candidates&status=pending"); renderCandidates(data.candidates || []); }
+  catch (error) { node.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`; }
+}
 async function loadSources() {
   const node = document.querySelector("#sourcesList");
   node.innerHTML = '<p class="muted">Loading sources…</p>';
@@ -193,6 +222,32 @@ document.querySelector("#sourceForm").addEventListener("submit", async (event) =
   finally { button.disabled = false; }
 });
 document.querySelector("#collectAllBtn").addEventListener("click", () => runCollection());
+document.querySelector("#refreshCandidatesBtn").addEventListener("click", loadCandidates);
+document.querySelector("#candidatesList").addEventListener("click", async (event) => {
+  const approve = event.target.closest("[data-candidate-approve]");
+  const reject = event.target.closest("[data-candidate-reject]");
+  if (approve) {
+    const id = approve.dataset.candidateApprove;
+    const card = approve.closest(".candidate-item");
+    const ticket_url = card.querySelector(".candidate-ticket-input").value.trim();
+    approve.disabled = true;
+    try {
+      const data = await api("/api/admin?action=candidate-approve", { method: "POST", body: JSON.stringify({ id, ticket_url }) });
+      message(document.querySelector("#collectionMessage"), "Approved. Tracked event created: /go/" + data.event.slug, true);
+      await Promise.all([loadCandidates(), loadEvents()]);
+    } catch (error) { alert(error.message); approve.disabled = false; }
+    return;
+  }
+  if (reject) {
+    if (!confirm("Reject this discovered event?")) return;
+    reject.disabled = true;
+    try {
+      await api("/api/admin?action=candidate-reject", { method: "POST", body: JSON.stringify({ id: reject.dataset.candidateReject }) });
+      await loadCandidates();
+    } catch (error) { alert(error.message); reject.disabled = false; }
+  }
+});
+
 document.querySelector("#sourceCancelBtn").addEventListener("click", clearSourceForm);
 document.querySelector("#sourcesList").addEventListener("click", async (event) => {
   const edit = event.target.closest("[data-source-edit]");
