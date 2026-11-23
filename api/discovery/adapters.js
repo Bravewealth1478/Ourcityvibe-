@@ -261,6 +261,8 @@ async function fetchSource(source) {
       if (!current) throw new Error("Source returned an unsafe redirect URL.");
       continue;
     }
+    if (response.status === 429) throw new Error("The event provider is rate limiting requests (HTTP 429). It temporarily refused automated access. No events were imported from this source; try again later or use another provider.");
+    if (response.status === 403) throw new Error("The event provider denied automated access (HTTP 403). Use an official API or an approved feed for this provider.");
     if (response.status < 200 || response.status >= 300) throw new Error("Source returned HTTP " + response.status + ".");
     if (!allowedContentType(source.source_type, response.contentType)) throw new Error("Source returned an unsupported content type: " + (response.contentType || "missing") + ".");
     return { body: response.body, contentType: response.contentType, finalUrl: current };
