@@ -39,3 +39,23 @@ test("extracts Schema.org Event JSON-LD from a website page", () => {
   assert.equal(rows[0].title, "Live in London");
   assert.equal(rows[0].country_code, "GB");
 });
+
+test("blocks private and reserved IPv4 and IPv6 ranges", () => {
+  const { blockedIp } = require("../api/discovery/adapters");
+  for (const ip of ["127.0.0.1","10.0.0.1","172.16.0.1","192.168.1.1","169.254.1.1","100.64.0.1","198.51.100.2","203.0.113.4","224.0.0.1","::1","fc00::1","fe80::1","ff02::1","2001:db8::1"]) {
+    assert.equal(blockedIp(ip), true, ip + " should be blocked");
+  }
+  for (const ip of ["8.8.8.8","1.1.1.1","2606:4700:4700::1111"]) {
+    assert.equal(blockedIp(ip), false, ip + " should be allowed");
+  }
+});
+
+test("enforces source-specific response content types", () => {
+  const { allowedContentType } = require("../api/discovery/adapters");
+  assert.equal(allowedContentType("api", "application/json; charset=utf-8"), true);
+  assert.equal(allowedContentType("rss", "application/rss+xml"), true);
+  assert.equal(allowedContentType("ical", "text/calendar; charset=utf-8"), true);
+  assert.equal(allowedContentType("website", "text/html"), true);
+  assert.equal(allowedContentType("api", "image/png"), false);
+  assert.equal(allowedContentType("rss", "text/html"), false);
+});
