@@ -127,6 +127,12 @@ exports.handler = async (event) => {
   if (action === "logout") return json(200, { ok: true }, { "set-cookie": clearCookie() });
   if (!validSession(event, config.secret)) return json(401, { error: "Please sign in to continue." });
   if (action === "me" && event.httpMethod === "GET") return json(200, { authenticated: true });
+  if (action === "sources" && event.httpMethod === "GET") {
+    try {
+      const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config,last_checked_at,last_success_at,last_error,created_at,updated_at&order=created_at.desc");
+      return json(200, { sources });
+    } catch (error) { console.error("Source listing failed:", error); return json(500, { error: error.message }); }
+  }
   try {
     if (action === "events" && event.httpMethod === "GET") {
       const events = await supabase(config, "events?select=id,title,ticket_url,platform,city,event_date,image_url,slug,status,created_at&order=created_at.desc");
@@ -145,6 +151,37 @@ exports.handler = async (event) => {
     if (!checkOrigin(event)) return json(403, { error: "Request origin could not be verified." });
     let body;
     try { body = JSON.parse(event.body || "{}"); } catch { return json(400, { error: "Invalid request." }); }
+    if (action === "source-create" || action === "source-update") {
+      const id = body.id;
+      if (action === "source-update" && !/^[0-9a-f-]{36}$/i.test(id || "")) return json(400, { error: "Invalid source id." });
+      const name = String(body.name || "").trim();
+      const sourceType = String(body.source_type || "");
+      let parsedUrl;
+      try { parsedUrl = new URL(String(body.base_url || "")); } catch { return json(400, { error: "Enter a valid source URL." }); }
+      if (!name || name.length > 120) return json(400, { error: "Enter a source name (maximum 120 characters)." });
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) return json(400, { error: "Source URL must use HTTP or HTTPS." });
+      if (!["api","rss","ical","website","directory","manual"].includes(sourceType)) return json(400, { error: "Choose a supported source type." });
+      const scope = String(body.country_scope || "global");
+      if (!["global","country","regional","local"].includes(scope)) return json(400, { error: "Choose a valid coverage scope." });
+      const codes = Array.isArray(body.country_codes) ? [...new Set(body.country_codes.map(x => String(x).trim().toUpperCase()).filter(Boolean))] : [];
+      if (codes.some(x => !/^[A-Z]{2}$/.test(x))) return json(400, { error: "Country codes must be two-letter ISO codes." });
+      if (scope !== "global" && !codes.length) return json(400, { error: "Add at least one two-letter country code for this scope." });
+      let sourceConfig = {};
+      try { sourceConfig = typeof body.config === "string" ? JSON.parse(body.config || "{}") : (body.config || {}); } catch { return json(400, { error: "Source configuration must be valid JSON." }); }
+      if (!sourceConfig || Array.isArray(sourceConfig) || typeof sourceConfig !== "object") return json(400, { error: "Source configuration must be a JSON object." });
+      const values = { name, source_type: sourceType, base_url: parsedUrl.toString(), enabled: body.enabled !== false, country_scope: scope, country_codes: codes, config: sourceConfig };
+      const rows = action === "source-create"
+        ? await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config,created_at", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify(values) })
+        : await supabase(config, "event_sources?id=eq." + id + "&select=id,name,source_type,base_url,enabled,country_scope,country_codes,config,updated_at", { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify({ ...values, updated_at: new Date().toISOString() }) });
+      if (!rows.length) return json(404, { error: "Source not found." });
+      return json(action === "source-create" ? 201 : 200, { source: rows[0] });
+    }
+    if (action === "source-toggle") {
+      if (!/^[0-9a-f-]{36}$/i.test(body.id || "")) return json(400, { error: "Invalid source id." });
+      const rows = await supabase(config, "event_sources?id=eq." + body.id + "&select=id,enabled", { method: "PATCH", headers: { prefer: "return=representation" }, body: JSON.stringify({ enabled: Boolean(body.enabled), updated_at: new Date().toISOString() }) });
+      if (!rows.length) return json(404, { error: "Source not found." });
+      return json(200, { source: rows[0] });
+    }
     if (action === "create") {
       const values = validateEvent(body, true);
       const slug = await uniqueSlug(config, values.title);
