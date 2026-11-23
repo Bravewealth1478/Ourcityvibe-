@@ -142,3 +142,9 @@ Collection is deliberately manual at this stage. It is not scheduled, does not p
 The admin dashboard now includes a pending candidate review queue. Each card shows source, date/location details, description and available image, plus a source listing link. Administrators can supply or correct the ticket/official event URL, approve the candidate, or reject it. Approval creates a normal active row in `events` with a unique tracked slug and links it to the discovery candidate; only then does the event appear in the existing tracked-events dashboard. Candidates without a valid HTTP(S) ticket/event URL cannot be approved. Rejection only changes review status and does not delete source data.
 
 The review queue is separate from collection. No candidate is automatically approved or published. The admin must manually inspect each candidate before creating its tracked event.
+
+
+## One-click event discovery experience
+The admin dashboard now presents a primary **Fetch Events** action. The source registry and source editor are tucked under **Advanced source settings**, so normal operation does not require configuring feeds. The first built-in directory set is seeded in Supabase and includes Eventbrite structured-data event listing pages for Lagos, Abuja, Ibadan, Accra, Dubai, London, New York, and Toronto. Fetch Events runs enabled sources in bounded batches and places extracted candidates into the review queue; it never publishes automatically. Additional providers and cities can be added through advanced settings as their source access and reliability are verified.
+
+The built-in directory set is an initial coverage layer, not a guarantee that every page will return data on every run. Some event directories may block automated requests or change their markup; per-source outcomes are visible in collection results. Broader coverage requires additional independent providers and, where applicable, API credentials.
