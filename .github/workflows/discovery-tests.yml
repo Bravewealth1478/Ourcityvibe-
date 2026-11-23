@@ -6,6 +6,8 @@ on:
     paths:
       - "api/discovery/**"
       - "test/**"
+      - "public/admin.*"
+      - "netlify/functions/admin.js"
       - ".github/workflows/discovery-tests.yml"
   pull_request:
     paths:
@@ -21,5 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Check admin JavaScript syntax
+        run: node --check public/admin.js && node --check netlify/functions/admin.js
       - name: Run discovery adapter tests
         run: node --test test/discovery-adapters.test.js
