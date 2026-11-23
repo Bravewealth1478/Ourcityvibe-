@@ -136,3 +136,9 @@ Registering a source does not fetch it. Automated collection, candidate review, 
 Authenticated administrators can run one enabled source or collect through the enabled source registry in small batches. The collector uses the hardened adapters, records a `discovery_runs` row for each source attempt, and stores normalised records in `discovered_events`. It refreshes repeat records by source/external ID or source fingerprint, updates first/last-seen metadata, and flags matching fingerprints from another source as duplicates. Collection results and source errors are shown in the admin dashboard.
 
 Collection is deliberately manual at this stage. It is not scheduled, does not publish to `events`, and does not create tracked links. Manual-only source records are excluded from automated fetching. The collector processes three sources per request and paginates through the registry to avoid an unbounded single request. Candidates remain pending review unless a cross-source fingerprint match marks them as duplicates.
+
+
+## Phase 3.6 candidate review and approval
+The admin dashboard now includes a pending candidate review queue. Each card shows source, date/location details, description and available image, plus a source listing link. Administrators can supply or correct the ticket/official event URL, approve the candidate, or reject it. Approval creates a normal active row in `events` with a unique tracked slug and links it to the discovery candidate; only then does the event appear in the existing tracked-events dashboard. Candidates without a valid HTTP(S) ticket/event URL cannot be approved. Rejection only changes review status and does not delete source data.
+
+The review queue is separate from collection. No candidate is automatically approved or published. The admin must manually inspect each candidate before creating its tracked event.
