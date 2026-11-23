@@ -88,10 +88,12 @@ function renderSources(sources) {
 async function runCollection(sourceId = null) {
   const button = sourceId
     ? document.querySelector('[data-source-run="' + sourceId + '"]')
-    : document.querySelector("#collectAllBtn");
+    : (document.querySelector("#fetchEventsBtn") || document.querySelector("#collectAllBtn"));
   const messageNode = document.querySelector("#collectionMessage");
+  const summaryNode = document.querySelector("#fetchSummary");
   if (button) button.disabled = true;
   document.querySelector("#collectionResults").innerHTML = "";
+  if (summaryNode) summaryNode.textContent = "Fetching events. This can take a little while…";
   const allResults = [];
   try {
     let offset = 0;
@@ -101,6 +103,7 @@ async function runCollection(sourceId = null) {
       const payload = sourceId ? { source_id: sourceId } : { offset };
       const data = await api("/api/admin?action=collect", { method: "POST", body: JSON.stringify(payload) });
       const results = data.results || [];
+      if (data.message && summaryNode) summaryNode.textContent = data.message;
       allResults.push(...results);
       document.querySelector("#collectionResults").innerHTML = allResults.map(item => `<article class="collection-result">
         <strong>${escapeHtml(item.source_name)}</strong><span class="source-state ${item.status === "succeeded" ? "enabled" : ""}">${escapeHtml(item.status)}</span>
@@ -113,7 +116,10 @@ async function runCollection(sourceId = null) {
     }
     const total = allResults.reduce((sum, item) => sum + item.items_created, 0);
     const failed = allResults.filter(item => item.status !== "succeeded").length;
-    message(messageNode, "Collection finished. " + allResults.length + " source(s) checked, " + total + " new candidate(s) added to review." + (failed ? " " + failed + " source(s) reported errors." : ""), failed === 0);
+    const finalText = "Finished. " + allResults.length + " source(s) checked, " + total + " new candidate(s) added to review." + (failed ? " " + failed + " source(s) reported errors." : "");
+    message(messageNode, finalText, failed === 0);
+    if (summaryNode && allResults.length) summaryNode.textContent = finalText;
+    if (summaryNode && !allResults.length) summaryNode.textContent = "No discovery sources are configured yet. Open Advanced source settings to add feeds.";
     await loadSources();
   } catch (error) { message(messageNode, error.message); }
   finally { if (button) button.disabled = false; }
@@ -222,6 +228,7 @@ document.querySelector("#sourceForm").addEventListener("submit", async (event) =
   finally { button.disabled = false; }
 });
 document.querySelector("#collectAllBtn").addEventListener("click", () => runCollection());
+document.querySelector("#fetchEventsBtn").addEventListener("click", () => runCollection());
 document.querySelector("#refreshCandidatesBtn").addEventListener("click", loadCandidates);
 document.querySelector("#candidatesList").addEventListener("click", async (event) => {
   const approve = event.target.closest("[data-candidate-approve]");
