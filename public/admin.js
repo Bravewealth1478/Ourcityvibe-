@@ -28,6 +28,7 @@ function showDashboard() {
   dashboardPanel.hidden = false;
   logoutBtn.hidden = false;
   loadEvents();
+  loadSources();
 }
 function showLogin() {
   loginPanel.hidden = false;
@@ -65,6 +66,29 @@ function renderEvents(events) {
       <div class="links-panel" hidden>${linkButtons}</div>
     </article>`;
   }).join("");
+}
+function clearSourceForm() {
+  document.querySelector("#sourceForm").reset();
+  document.querySelector("#sourceId").value = "";
+  document.querySelector("#sourceSaveBtn").textContent = "Add source";
+  document.querySelector("#sourceCancelBtn").hidden = true;
+  message(document.querySelector("#sourceMessage"), "");
+}
+function renderSources(sources) {
+  document.querySelector("#sourceCount").textContent = String(sources.length);
+  const node = document.querySelector("#sourcesList");
+  if (!sources.length) { node.innerHTML = '<div class="empty-state">No discovery sources have been added yet.</div>'; return; }
+  node.innerHTML = sources.map((source) => `<article class="source-item" data-source-id="${escapeHtml(source.id)}">
+    <div class="source-info"><div><h3>${escapeHtml(source.name)}</h3><p>${escapeHtml(source.source_type.toUpperCase())} · ${escapeHtml(source.country_scope)} · ${escapeHtml((source.country_codes || []).join(", ") || "All countries")}</p><a href="${escapeHtml(source.base_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.base_url)}</a></div><span class="source-state ${source.enabled ? "enabled" : ""}">${source.enabled ? "Enabled" : "Disabled"}</span></div>
+    <div class="source-actions"><button class="small-button" type="button" data-source-edit="${escapeHtml(source.id)}">Edit</button><button class="small-button" type="button" data-source-toggle="${escapeHtml(source.id)}" data-enabled="${source.enabled ? "true" : "false"}">${source.enabled ? "Disable" : "Enable"}</button></div>
+    ${source.last_error ? `<p class="source-error">Last collection error: ${escapeHtml(source.last_error)}</p>` : ""}
+  </article>`).join("");
+}
+async function loadSources() {
+  const node = document.querySelector("#sourcesList");
+  node.innerHTML = '<p class="muted">Loading sources…</p>';
+  try { const data = await api("/api/admin?action=sources"); renderSources(data.sources || []); }
+  catch (error) { node.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`; }
 }
 async function loadEvents() {
   eventsList.innerHTML = '<p class="muted">Loading events…</p>';
@@ -112,6 +136,57 @@ eventForm.addEventListener("submit", async (event) => {
     await loadEvents();
   } catch (error) { message(formMessage, error.message); }
   finally { saveBtn.disabled = false; }
+});
+document.querySelector("#sourceForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = document.querySelector("#sourceSaveBtn");
+  const id = document.querySelector("#sourceId").value;
+  button.disabled = true;
+  message(document.querySelector("#sourceMessage"), "Saving source…");
+  const payload = {
+    name: document.querySelector("#sourceName").value.trim(),
+    source_type: document.querySelector("#sourceType").value,
+    base_url: document.querySelector("#sourceUrl").value.trim(),
+    country_scope: document.querySelector("#sourceScope").value,
+    country_codes: document.querySelector("#sourceCountries").value.split(",").map(x => x.trim().toUpperCase()).filter(Boolean),
+    config: document.querySelector("#sourceConfig").value.trim() || "{}",
+  };
+  try {
+    await api("/api/admin?action=" + (id ? "source-update" : "source-create"), { method: "POST", body: JSON.stringify(id ? { ...payload, id } : payload) });
+    clearSourceForm();
+    message(document.querySelector("#sourceMessage"), "Source saved.", true);
+    await loadSources();
+  } catch (error) { message(document.querySelector("#sourceMessage"), error.message); }
+  finally { button.disabled = false; }
+});
+document.querySelector("#sourceCancelBtn").addEventListener("click", clearSourceForm);
+document.querySelector("#sourcesList").addEventListener("click", async (event) => {
+  const edit = event.target.closest("[data-source-edit]");
+  if (edit) {
+    try {
+      const { sources } = await api("/api/admin?action=sources");
+      const source = (sources || []).find(item => item.id === edit.dataset.sourceEdit);
+      if (!source) throw new Error("Source not found.");
+      document.querySelector("#sourceId").value = source.id;
+      document.querySelector("#sourceName").value = source.name;
+      document.querySelector("#sourceType").value = source.source_type;
+      document.querySelector("#sourceUrl").value = source.base_url;
+      document.querySelector("#sourceScope").value = source.country_scope;
+      document.querySelector("#sourceCountries").value = (source.country_codes || []).join(", ");
+      document.querySelector("#sourceConfig").value = JSON.stringify(source.config || {}, null, 2);
+      document.querySelector("#sourceSaveBtn").textContent = "Update source";
+      document.querySelector("#sourceCancelBtn").hidden = false;
+      document.querySelector("#sourceForm").scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (error) { alert(error.message); }
+    return;
+  }
+  const toggle = event.target.closest("[data-source-toggle]");
+  if (toggle) {
+    try {
+      await api("/api/admin?action=source-toggle", { method: "POST", body: JSON.stringify({ id: toggle.dataset.sourceToggle, enabled: toggle.dataset.enabled !== "true" }) });
+      await loadSources();
+    } catch (error) { alert(error.message); }
+  }
 });
 document.querySelector("#cancelEditBtn").addEventListener("click", clearForm);
 document.querySelector("#refreshBtn").addEventListener("click", loadEvents);
