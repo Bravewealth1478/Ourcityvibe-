@@ -130,3 +130,9 @@ The fetch layer now resolves each source host, rejects private/reserved addresse
 The protected admin dashboard now includes an Event discovery sources panel. Administrators can register and edit API, RSS, iCalendar, website, directory, and manual sources; set global or country/regional/local coverage; supply two-letter country codes; store JSON adapter configuration; and enable or disable sources. The service-role key remains server-side.
 
 Registering a source does not fetch it. Automated collection, candidate review, and approval-to-live-event workflows are still separate upcoming Phase 3 steps. Discovered candidates must never be published automatically.
+
+
+## Phase 3.5 manual event collection
+Authenticated administrators can run one enabled source or collect through the enabled source registry in small batches. The collector uses the hardened adapters, records a `discovery_runs` row for each source attempt, and stores normalised records in `discovered_events`. It refreshes repeat records by source/external ID or source fingerprint, updates first/last-seen metadata, and flags matching fingerprints from another source as duplicates. Collection results and source errors are shown in the admin dashboard.
+
+Collection is deliberately manual at this stage. It is not scheduled, does not publish to `events`, and does not create tracked links. Manual-only source records are excluded from automated fetching. The collector processes three sources per request and paginates through the registry to avoid an unbounded single request. Candidates remain pending review unless a cross-source fingerprint match marks them as duplicates.
