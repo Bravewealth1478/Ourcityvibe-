@@ -37,7 +37,6 @@ function normalise(raw, source, sourceUrl) {
   const country = raw.country || raw.addressCountry || addr.addressCountry || null;
   const min = Number(offers.lowPrice ?? offers.price ?? raw.price_min);
   const max = Number(offers.highPrice ?? raw.price_max);
-  const ticket = urlOf(raw.url || raw.ticket_url || raw.ticketUrl, sourceUrl);
   return {
     external_id: raw.identifier ? String(raw.identifier.value || raw.identifier) : (raw.id == null ? null : String(raw.id)),
     title: title.slice(0, 300),
@@ -53,7 +52,7 @@ function normalise(raw, source, sourceUrl) {
     timezone: raw.timezone || raw.timeZone || null,
     event_date: dateOf(raw.startDate || raw.start_date || raw.start || raw.eventDate || raw.date),
     end_date: dateOf(raw.endDate || raw.end_date || raw.end),
-    ticket_url: ticket,
+    ticket_url: urlOf(raw.url || raw.ticket_url || raw.ticketUrl, sourceUrl),
     source_url: urlOf(sourceUrl, source && source.base_url),
     image_url: urlOf(img && (img.url || img) || raw.image_url, sourceUrl),
     currency: offers.priceCurrency || raw.currency || null,
@@ -82,7 +81,7 @@ function attr(block, tag, name) {
 }
 function parseRssAtom(xml, source) {
   const atom = /<feed(?:\s|>)/i.test(xml);
-  return blocks(xml, atom ? "entry" : "item").map((b) => normalise({
+  return blocks(xml, atom ? "entry" : "item").map(b => normalise({
     id: value(b, "guid") || value(b, "id"),
     title: value(b, "title"),
     description: value(b, "description") || value(b, "summary") || value(b, "content"),
