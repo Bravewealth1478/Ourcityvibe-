@@ -34,3 +34,6 @@ module.exports = async function adminApi(req, res) {
     return res.end(JSON.stringify({ error: "The request could not be completed." }));
   }
 };
+
+// Source collection can fetch up to three independently bounded feeds per request.
+module.exports.config = { maxDuration: 60 };
