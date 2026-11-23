@@ -120,3 +120,13 @@ No source is activated automatically by this module. A source must be configured
 
 ## Phase boundary
 Phase 1 and Phase 2 remain in place. Phase 3 is being implemented in stages. Phase 4 reporting and Phase 5 AI-assisted caption drafting remain out of scope until Phase 3 is complete and tested.
+
+## Phase 3.2 discovery adapters
+The server-side adapter module in `api/discovery/adapters.js` normalises JSON API responses, RSS/Atom feeds, iCalendar VEVENT entries, and Schema.org Event JSON-LD from web pages into a common event candidate shape. Parser tests run in GitHub Actions.
+
+The initial fetch layer has request timeouts, response-size limits, redirect limits, protocol checks, and private-address checks. DNS resolution and the subsequent fetch are not yet pinned to the same resolved address, so arbitrary administrator-entered URLs must not be collected automatically until the fetch layer receives the planned DNS-rebinding/SSRF hardening and source-host policy checks. iCalendar timezone handling also needs additional TZID coverage before broad use.
+
+## Phase 3.3 source registry administration
+The protected admin dashboard now includes an Event discovery sources panel. Administrators can register and edit API, RSS, iCalendar, website, directory, and manual sources; set global or country/regional/local coverage; supply two-letter country codes; store JSON adapter configuration; and enable or disable sources. The service-role key remains server-side.
+
+Registering a source does not fetch it. Automated collection, candidate review, and approval-to-live-event workflows are still separate upcoming Phase 3 steps. Discovered candidates must never be published automatically.
