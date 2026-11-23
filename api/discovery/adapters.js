@@ -48,7 +48,7 @@ function normalise(raw, source, sourceUrl) {
     city: clean(raw.city || raw.addressLocality || addr.addressLocality || "").slice(0, 120) || null,
     region: clean(raw.region || raw.addressRegion || addr.addressRegion || "").slice(0, 120) || null,
     country: clean(typeof country === "object" ? country.name || country.identifier : country || "").slice(0, 120) || null,
-    country_code: countryCode(raw.country_code || raw.countryCode || (typeof country === "object" ? country.identifier : null)),
+    country_code: countryCode(raw.country_code || raw.countryCode || (typeof country === "object" ? country.identifier : (String(country || "").length === 2 ? country : null))),
     timezone: raw.timezone || raw.timeZone || null,
     event_date: dateOf(raw.startDate || raw.start_date || raw.start || raw.eventDate || raw.date),
     end_date: dateOf(raw.endDate || raw.end_date || raw.end),
