@@ -32,7 +32,7 @@ async function logClick(url, key, row) {
     method: "POST",
     headers: {
       apikey: key,
-      authorization: `Bearer ${key}`,
+      ...(key.startsWith("sb_secret_") ? {} : { authorization: `Bearer ${key}` }),
       "content-type": "application/json",
       prefer: "return=minimal",
     },
@@ -61,7 +61,7 @@ module.exports = async function trackEvent(req, res) {
   try {
     lookup = await fetch(
       `${baseUrl}/rest/v1/events?select=id,ticket_url&slug=eq.${encodeURIComponent(slug)}&status=eq.active&limit=1`,
-      { headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}` } },
+      { headers: { apikey: serviceKey, ...(serviceKey.startsWith("sb_secret_") ? {} : { authorization: `Bearer ${serviceKey}` }) } },
     );
   } catch (error) {
     console.error("Event lookup request failed:", error);
