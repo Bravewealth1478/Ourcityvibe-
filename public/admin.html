@@ -47,10 +47,10 @@
         </section>
       </div>
       <section class="admin-card candidates-card">
-        <div class="events-heading"><div><h2>Discovered event candidates</h2><p class="muted">Review imported events before they become live tracked events.</p></div><div class="source-heading-actions"><span id="candidateCount" class="count-pill">0</span><button id="refreshCandidatesBtn" class="quiet-button" type="button">Refresh queue</button></div></div>
+        <div class="events-heading"><div><h2>Event discovery</h2><p class="muted">Find local and international events, then review them before publishing.</p></div><div class="source-heading-actions"><button id="fetchEventsBtn" class="primary-button" type="button"><span aria-hidden="true">↻</span> Fetch Events</button></div></div><div id="fetchSummary" class="fetch-summary" role="status">Ready to fetch events from your enabled discovery sources.</div><div class="candidate-toolbar"><span id="candidateCount" class="count-pill">0 pending</span><button id="refreshCandidatesBtn" class="quiet-button" type="button">Refresh queue</button></div>
         <div id="candidatesList" class="candidates-list"><p class="muted">Sign in to review discovered events.</p></div>
       </section>
-      <section class="admin-card sources-card">
+      <details class="admin-card sources-card"><summary><span><strong>Advanced source settings</strong><small>Optional. Manage the feeds used by event discovery.</small></span><span class="details-chevron">+</span></summary>
         <div class="events-heading"><div><h2>Event discovery sources</h2><p class="muted">Manage international and local feeds. Sources are registered here; importing and publishing remain separate steps.</p></div><div class="source-heading-actions"><span id="sourceCount" class="count-pill">0</span><button id="collectAllBtn" class="primary-button" type="button">Run all enabled sources</button></div></div>
         <form id="sourceForm" class="source-form">
           <input type="hidden" id="sourceId">
