@@ -59,11 +59,16 @@ function checkOrigin(event) {
   try { return new URL(origin).host === host; } catch { return false; }
 }
 async function supabase(config, path, options = {}) {
+  const authHeaders = { apikey: config.key };
+  // Supabase's newer sb_secret_* keys are opaque API keys, not JWTs.
+  // They must be sent as apikey only, never as Authorization: Bearer.
+  if (!config.key.startsWith("sb_secret_")) {
+    authHeaders.authorization = `Bearer ${config.key}`;
+  }
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
     ...options,
     headers: {
-      apikey: config.key,
-      authorization: `Bearer ${config.key}`,
+      ...authHeaders,
       "content-type": "application/json",
       ...(options.headers || {}),
     },
