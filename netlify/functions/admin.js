@@ -165,7 +165,7 @@ exports.handler = async (event) => {
       const sourceFilter = sourceId ? "&id=eq." + sourceId : "";
       const offset = Math.max(0, Math.min(10000, Number.parseInt(body.offset || "0", 10) || 0));
       const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config&id=not.is.null" + sourceFilter + "&enabled=eq.true&source_type=neq.manual&order=created_at.asc&limit=3&offset." + offset);
-      if (!sources.length) return json(404, { error: "No enabled sources were found." });
+      if (!sources.length) return json(200, { results: [], message: "No discovery sources are configured yet. Add your sources once in Advanced source settings, then Fetch Events will run them for you." });
       const summaries = [];
       for (const source of sources) {
         const runRows = await supabase(config, "discovery_runs?select=id", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify({ source_id: source.id, trigger_type: "manual", status: "running" }) });
