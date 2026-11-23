@@ -156,10 +156,10 @@ exports.handler = async (event) => {
       const sourceId = body.source_id ? String(body.source_id) : null;
       if (sourceId && !/^[0-9a-f-]{36}$/i.test(sourceId)) return json(400, { error: "Invalid source id." });
       const sourceFilter = sourceId ? "&id=eq." + sourceId : "";
-      const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config&id=not.is.null" + sourceFilter + "&enabled=eq.true&order=created_at.asc");
+      const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config&id=not.is.null" + sourceFilter + "&enabled=eq.true&source_type=neq.manual&order=created_at.asc");
       if (!sources.length) return json(404, { error: "No enabled sources were found." });
       const summaries = [];
-      for (const source of sources.slice(0, 15)) {
+      for (const source of sources.slice(0, 3)) {
         const runRows = await supabase(config, "discovery_runs?select=id", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify({ source_id: source.id, trigger_type: "manual", status: "running" }) });
         const runId = runRows[0].id;
         let seen = 0, created = 0, updated = 0, duplicates = 0, runError = null;
