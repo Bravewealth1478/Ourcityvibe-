@@ -89,3 +89,10 @@ test("normalises Eventbrite API event payloads", () => {
   assert.equal(rows[0].venue_name, "Civic Centre");
   assert.equal(rows[0].image_url, "https://img.example/eb-1.jpg");
 });
+
+test("does not mistake an RSS article publication date for an event start date", () => {
+  const xml = '<rss><channel><item><title>Event announcement article</title><description>Read about an upcoming festival</description><link>https://events.example.org/article</link><pubDate>Wed, 10 Feb 2027 18:00:00 GMT</pubDate></item></channel></rss>';
+  const rows = parseRssAtom(xml, source);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].event_date, null);
+});
