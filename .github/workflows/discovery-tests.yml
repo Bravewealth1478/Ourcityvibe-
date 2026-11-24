@@ -26,5 +26,7 @@ jobs:
           node-version: 22
       - name: Check admin JavaScript syntax
         run: node --check public/admin.js && node --check netlify/functions/admin.js && node --check api/admin.js
+      - name: Check serverless admin syntax
+        run: node --check netlify/functions/admin.js
       - name: Run discovery adapter tests
         run: node --test test/*.test.js
