@@ -138,7 +138,10 @@ exports.handler = async (event) => {
   if (action === "sources" && event.httpMethod === "GET") {
     try {
       const sources = await supabase(config, "event_sources?select=id,name,source_type,base_url,enabled,country_scope,country_codes,config,last_checked_at,last_success_at,last_error,created_at,updated_at&order=created_at.desc");
-      return json(200, { sources });
+      return json(200, { sources: sources.map((source) => {
+        const credentialName = source.config?.auth_header_env || source.config?.auth_query_env || null;
+        return { ...source, credential_name: credentialName, credential_ready: !credentialName || Boolean(process.env[credentialName]) };
+      }) });
     } catch (error) { console.error("Source listing failed:", error); return json(500, { error: error.message }); }
   }
   try {
@@ -168,6 +171,11 @@ exports.handler = async (event) => {
       if (!sources.length) return json(200, { results: [], message: "No discovery sources are configured yet. Add your sources once in Advanced source settings, then Fetch Events will run them for you." });
       const summaries = [];
       for (const source of sources) {
+        const requiredCredential = source.config?.auth_header_env || source.config?.auth_query_env || null;
+        if (requiredCredential && !process.env[requiredCredential]) {
+          summaries.push({ source_id: source.id, source_name: source.name, status: "skipped", items_seen: 0, items_created: 0, items_updated: 0, duplicates_found: 0, error: null, note: "Waiting for " + requiredCredential + " to be configured in Vercel." });
+          continue;
+        }
         const runRows = await supabase(config, "discovery_runs?select=id", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify({ source_id: source.id, trigger_type: "manual", status: "running" }) });
         const runId = runRows[0].id;
         let seen = 0, created = 0, updated = 0, duplicates = 0, runError = null;
