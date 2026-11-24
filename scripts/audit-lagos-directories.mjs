@@ -40,3 +40,32 @@ for (const [name, url] of urls) {
     console.log(JSON.stringify(out));
   } catch(e) { console.log(JSON.stringify({name,url,error:String(e)})); }
 }
+
+const followups = [
+  ["AllEvents Lagos concerts RSS", "https://allevents.in/rss3.php?city=lagos&category=concerts"],
+  ["AllEvents sample Lagos event", "https://allevents.in/lagos/davido-in-lagos/3300030972128955"],
+  ["AllEvents Terms of Service", "https://allevents.in/conditions"],
+];
+for (const [name, url] of followups) {
+  try {
+    const r = await fetch(url, { headers, redirect: "follow", signal: AbortSignal.timeout(18000) });
+    const body = await r.text();
+    const out = { name, requestedUrl: url, finalUrl: r.url, status: r.status, contentType: r.headers.get("content-type"), bytes: Buffer.byteLength(body) };
+    if (name.includes("RSS")) {
+      const items = [...body.matchAll(/<item\\b[^>]*>([\\s\\S]*?)<\\/item>/gi)].map(m => {
+        const block = m[1];
+        const field = tag => (block.match(new RegExp("<" + tag + "[^>]*>([\\\\s\\\\S]*?)<\\\\/" + tag + ">", "i")) || [])[1]?.replace(/<!\\[CDATA\\[|\\]\\]>/g, "").replace(/<[^>]+>/g, " ").trim() || "";
+        return { title: field("title"), link: field("link"), pubDate: field("pubDate"), descriptionSample: field("description").slice(0, 260) };
+      });
+      out.itemCount = items.length;
+      out.sampleItems = items.slice(0, 8);
+      out.hasEventStartDateField = /startDate|eventDate|dtstart/i.test(body);
+      out.rssRoot = (body.match(/<rss[^>]*>/i) || body.match(/<feed[^>]*>/i) || [])[0] || "";
+    } else {
+      out.title = (body.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i) || [])[1]?.replace(/\\s+/g, " ").trim() || "";
+      Object.assign(out, parsePage(body));
+      out.termsTextSample = body.replace(/<script[\\s\\S]*?<\\/script>/gi, " ").replace(/<style[\\s\\S]*?<\\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim().slice(0, 1800);
+    }
+    console.log(JSON.stringify(out));
+  } catch (e) { console.log(JSON.stringify({ name, url, error: String(e) })); }
+}
