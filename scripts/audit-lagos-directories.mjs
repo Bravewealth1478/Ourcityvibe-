@@ -67,7 +67,7 @@ for (const [name, url] of followups) {
     } else {
       out.title = (body.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]?.replace(/\s+/g, " ").trim() || "";
       Object.assign(out, parsePage(body));
-      out.termsTextSample = body.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 1800);
+      const termsText = body.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();\n      out.termsTextSample = termsText.slice(0, 1800);\n      out.termsRelevantClauses = [...termsText.matchAll(/.{0,220}(?:automated|robot|scrap|crawl|harvest|copy|reproduce|commercial|data mining|third.party|content|intellectual property).{0,320}/gi)].slice(0, 18).map(m => m[0]);
     }
     console.log(JSON.stringify(out));
   } catch (e) { console.log(JSON.stringify({ name, url, error: String(e) })); }
