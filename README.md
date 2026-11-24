@@ -174,3 +174,21 @@ The API integrations have parser tests using representative provider payloads. L
 
 ## Phase 3 provider credential handling
 The one-click collector checks provider credentials before creating a discovery run. API sources without their required environment variable are reported as skipped and waiting for configuration, rather than recording a failed run on every fetch. The source list identifies these providers as **Needs API key** and names the required Vercel variable without exposing its value. Disabled legacy Eventbrite directory sources remain excluded from collection; stale errors on disabled sources are hidden.
+
+
+## Phase 4 reporting and CSV export
+
+Phase 4 adds an authenticated Performance reports section to the admin dashboard. It reports:
+- Genuine tracked-link clicks, excluding detected bots and link previews.
+- Visitor-days, based on the existing daily visitor hash.
+- Bot/preview requests separately.
+- Activity by day, event, traffic source, country and device.
+- CSV export of the selected reporting period (7, 30, 90 or 365 days).
+
+Run [sql/phase4_reporting.sql](sql/phase4_reporting.sql) after the Phase 1, Phase 2 and Phase 3 SQL files. The reporting function is restricted to the server-side service role; browser clients do not receive direct database access. The report is an aggregate view and does not export raw IP addresses, user-agent strings, visitor hashes or referrer values.
+
+The reporting migration has been applied to the connected Supabase project and the report query has been checked against the current data. The production dashboard deployment is built from the main branch.
+
+## Phase 3 source coverage status
+
+The discovery workflow and review queue are implemented, but a successful import from a permitted, no-key event source has not yet been verified. Existing configured sources currently have no imported candidates; some return empty results and some require API credentials. AllEvents' terms prohibit automated crawling/scraping, so it is not enabled as a source. Do not treat Phase 3 source coverage as complete until a permitted source returns dated event candidates and the full pending-review/approval flow is tested.
