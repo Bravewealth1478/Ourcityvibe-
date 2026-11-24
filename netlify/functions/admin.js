@@ -151,6 +151,12 @@ exports.handler = async (event) => {
       const stats = new Map((statsRows || []).map((item) => [item.event_id, item]));
       return json(200, { events: events.map((item) => ({ ...item, genuine_clicks: Number(stats.get(item.id)?.genuine_clicks || 0), unique_visitors: Number(stats.get(item.id)?.unique_visitors || 0) })) });
     }
+    if (action === "reports" && event.httpMethod === "GET") {
+      const requestedDays = Number.parseInt(event.queryStringParameters?.days || "30", 10);
+      const days = Number.isFinite(requestedDays) ? Math.max(1, Math.min(365, requestedDays)) : 30;
+      const rows = await supabase(config, "rpc/admin_reporting_summary", { method: "POST", body: JSON.stringify({ p_days: days }) });
+      return json(200, { report: rows });
+    }
     if (action === "event" && event.httpMethod === "GET") {
       const id = event.queryStringParameters?.id || "";
       if (!/^[0-9a-f-]{36}$/i.test(id)) return json(400, { error: "Invalid event id." });
