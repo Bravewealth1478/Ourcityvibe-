@@ -212,38 +212,6 @@ async function runCollection(sourceId = null) {
   }
 }
 
-async function runAiSearch() {
-  const button = document.querySelector("#aiSearchBtn");
-  const area = document.querySelector("#aiSearchArea").value.trim() || "Nigeria";
-  const summary = document.querySelector("#fetchSummary");
-  const output = document.querySelector("#collectionResults");
-  const status = document.querySelector("#collectionMessage");
-  if (collectionRunning) return;
-  collectionRunning = true;
-  button.disabled = true;
-  button.textContent = "Searching…";
-  if (summary) summary.textContent = "Searching the public web for upcoming events in " + area + "…";
-  message(status, "AI event search is running. This may take up to a minute.");
-  output.innerHTML = "";
-  try {
-    const data = await api("/api/admin?action=ai-discover", { method: "POST", body: JSON.stringify({ area }) });
-    const r = data.result || {};
-    const text = "AI search finished. " + (r.items_created || 0) + " new candidate(s), " + (r.items_updated || 0) + " refreshed, " + (r.duplicates_found || 0) + " duplicates. " + (r.items_seen || 0) + " verified event record(s) processed.";
-    if (summary) summary.textContent = text;
-    message(status, text, true);
-    output.innerHTML = '<article class="collection-result"><strong>OpenAI Web Search</strong><span class="source-state enabled">Completed</span><p>' + escapeHtml(text) + '</p>' + (r.search_notes ? '<p class="muted">' + escapeHtml(r.search_notes) + '</p>' : '') + '</article>';
-    await Promise.all([loadCandidates(), loadSources()]);
-  } catch (error) {
-    if (summary) summary.textContent = "AI search failed: " + error.message;
-    message(status, "AI search failed: " + error.message);
-    output.innerHTML = '<p class="source-error">' + escapeHtml(error.message) + '</p>';
-  } finally {
-    collectionRunning = false;
-    button.disabled = false;
-    button.textContent = "AI Search Events";
-  }
-}
-
 function renderCandidates(candidates) {
   document.querySelector("#candidateCount").textContent = String(candidates.length);
   const node = document.querySelector("#candidatesList");
@@ -349,7 +317,6 @@ document.querySelector("#sourceForm").addEventListener("submit", async (event) =
 });
 document.querySelector("#collectAllBtn").addEventListener("click", () => runCollection());
 document.querySelector("#fetchEventsBtn").addEventListener("click", () => runCollection());
-document.querySelector("#aiSearchBtn").addEventListener("click", runAiSearch);
 document.querySelector("#stopFetchBtn").addEventListener("click", () => { stopCollectionRequested = true; document.querySelector("#stopFetchBtn").disabled = true; document.querySelector("#stopFetchBtn").textContent = "Stopping…"; });
 document.querySelector("#refreshCandidatesBtn").addEventListener("click", loadCandidates);
 document.querySelector("#refreshReportsBtn").addEventListener("click", loadReports);
