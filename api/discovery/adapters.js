@@ -209,7 +209,8 @@ function requestPinned(value, resolved, extraHeaders = {}) {
       method: "GET",
       headers: {
         "user-agent": UA,
-        accept: "application/json, application/rss+xml, application/atom+xml, text/calendar, application/xml, text/xml, text/html;q=0.9"
+        accept: "application/json, application/rss+xml, application/atom+xml, text/calendar, application/xml, text/xml, text/html;q=0.9",
+        ...extraHeaders
       },
       agent: false,
       lookup: (_hostname, lookupOptions, callback) => {
