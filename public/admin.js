@@ -131,8 +131,9 @@ function renderEvents(events) {
     return `<article class="event-item" data-event-id="${escapeHtml(event.id)}">
       <div class="event-top"><div><h3>${escapeHtml(event.title)}</h3><div class="event-meta">${escapeHtml(event.city || "City not set")} · ${escapeHtml(event.platform)} · ${formatDate(event.event_date)}</div><div class="event-meta">/${escapeHtml(event.slug)} · ${escapeHtml(event.status)}</div></div></div>
       <div class="event-stats">${Number(event.genuine_clicks || 0).toLocaleString()} genuine clicks <span style="color:#a6b5ab">·</span> ${Number(event.unique_visitors || 0).toLocaleString()} visitor-days</div>
-      <div class="event-controls"><button class="small-button accent" type="button" data-toggle-links>Tracked links</button><button class="small-button" type="button" data-edit="${escapeHtml(event.id)}">Edit</button>${event.status === "active" ? `<button class="small-button" type="button" data-archive="${escapeHtml(event.id)}">Archive</button>` : ""}</div>
+      <div class="event-controls"><button class="small-button accent" type="button" data-toggle-links>Tracked links</button>${event.status === "active" ? `<button class="small-button accent" type="button" data-promo-open="${escapeHtml(event.id)}">Promotional captions</button>` : ""}<button class="small-button" type="button" data-edit="${escapeHtml(event.id)}">Edit</button>${event.status === "active" ? `<button class="small-button" type="button" data-archive="${escapeHtml(event.id)}">Archive</button>` : ""}</div>
       <div class="links-panel" hidden>${linkButtons}</div>
+      <div class="promo-panel" id="promo-${escapeHtml(event.id)}" hidden><p class="muted">Generate and edit social captions. Nothing is posted automatically.</p><label>Affiliate disclosure (optional)</label><input class="promo-disclosure" maxlength="500" placeholder="Add disclosure text if this promotion uses an affiliate link"><div class="promo-actions"><button class="small-button accent" type="button" data-promo-generate="${escapeHtml(event.id)}">Generate captions</button></div><p class="message promo-message" role="status"></p><label>Social post caption</label><textarea class="promo-caption" maxlength="5000" rows="6"></textarea><label>WhatsApp Status / Stories version</label><textarea class="promo-short-caption" maxlength="1500" rows="3"></textarea><div class="promo-actions"><button class="primary-button" type="button" data-promo-save="${escapeHtml(event.id)}">Save draft</button><button class="small-button" type="button" data-promo-approve="${escapeHtml(event.id)}">Approve captions</button></div><p class="muted promo-status"></p></div>
     </article>`;
   }).join("");
 }
@@ -390,6 +391,25 @@ eventsList.addEventListener("click", async (event) => {
     const panel = toggle.closest(".event-item").querySelector(".links-panel");
     panel.hidden = !panel.hidden;
     return;
+  }
+  const promoOpen = event.target.closest("[data-promo-open]");
+  if (promoOpen) {
+    const id = promoOpen.dataset.promoOpen, panel = document.querySelector("#promo-" + CSS.escape(id));
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) { try { const data = await api("/api/admin?action=promo-caption&id=" + encodeURIComponent(id)); const draft = data.draft; if (draft) { panel.querySelector(".promo-caption").value = draft.caption || ""; panel.querySelector(".promo-short-caption").value = draft.short_caption || ""; panel.querySelector(".promo-disclosure").value = draft.affiliate_disclosure || ""; panel.querySelector(".promo-status").textContent = draft.status === "approved" ? "Approved by you." : "Saved draft."; } } catch (error) { message(panel.querySelector(".promo-message"), error.message); } }
+    return;
+  }
+  const promoGenerate = event.target.closest("[data-promo-generate]");
+  if (promoGenerate) {
+    const panel = promoGenerate.closest(".promo-panel"); promoGenerate.disabled = true; message(panel.querySelector(".promo-message"), "Generating captions…");
+    try { const data = await api("/api/admin?action=promo-generate", { method: "POST", body: JSON.stringify({ id: promoGenerate.dataset.promoGenerate, affiliate_disclosure: panel.querySelector(".promo-disclosure").value }) }); const draft = data.draft; panel.querySelector(".promo-caption").value = draft.caption || ""; panel.querySelector(".promo-short-caption").value = draft.short_caption || ""; panel.querySelector(".promo-disclosure").value = draft.affiliate_disclosure || ""; panel.querySelector(".promo-status").textContent = "Draft generated. Edit before saving or approving."; message(panel.querySelector(".promo-message"), "Captions generated. Review them before use.", true); } catch (error) { message(panel.querySelector(".promo-message"), error.message); }
+    finally { promoGenerate.disabled = false; } return;
+  }
+  const promoSave = event.target.closest("[data-promo-save], [data-promo-approve]");
+  if (promoSave) {
+    const panel = promoSave.closest(".promo-panel"), approve = promoSave.hasAttribute("data-promo-approve"); promoSave.disabled = true;
+    try { await api("/api/admin?action=promo-save", { method: "POST", body: JSON.stringify({ id: promoSave.dataset.promoSave || promoSave.dataset.promoApprove, caption: panel.querySelector(".promo-caption").value, short_caption: panel.querySelector(".promo-short-caption").value, affiliate_disclosure: panel.querySelector(".promo-disclosure").value, approve }) }); panel.querySelector(".promo-status").textContent = approve ? "Approved by you. Ready to copy and publish manually." : "Draft saved."; message(panel.querySelector(".promo-message"), approve ? "Captions approved." : "Draft saved.", true); } catch (error) { message(panel.querySelector(".promo-message"), error.message); }
+    finally { promoSave.disabled = false; } return;
   }
   const edit = event.target.closest("[data-edit]");
   if (edit) {
