@@ -1,0 +1,20 @@
+name: Candidate event source audit
+on:
+  push:
+    paths:
+      - "scripts/audit-event-sources.mjs"
+      - ".github/workflows/source-audit.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect candidate event sources
+        run: node scripts/audit-event-sources.mjs
