@@ -30,6 +30,7 @@ function showDashboard() {
   dashboardPanel.hidden = false;
   logoutBtn.hidden = false;
   loadEvents();
+  loadReports();
   loadSources();
   loadCandidates();
 }
@@ -45,6 +46,71 @@ function formatDate(value) {
   if (!value) return "Date not set";
   return new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
+
+let latestReport = null;
+function reportTable(rows, columns, emptyText = "No activity in this period.") {
+  if (!rows || !rows.length) return '<p class="muted">' + escapeHtml(emptyText) + '</p>';
+  return '<div class="report-scroll"><table><thead><tr>' + columns.map(col => '<th>' + escapeHtml(col.label) + '</th>').join("") + '</tr></thead><tbody>' +
+    rows.map(row => '<tr>' + columns.map(col => '<td>' + escapeHtml(col.render ? col.render(row) : row[col.key] ?? "—") + '</td>').join("") + '</tr>').join("") +
+    '</tbody></table></div>';
+}
+async function loadReports() {
+  const days = document.querySelector("#reportDays")?.value || "30";
+  const status = document.querySelector("#reportsMessage");
+  if (!status) return;
+  message(status, "Loading report data…");
+  try {
+    const { report } = await api("/api/admin?action=reports&days=" + encodeURIComponent(days));
+    latestReport = report;
+    const totals = report.totals || {};
+    document.querySelector("#reportKpis").innerHTML = [
+      ["Genuine clicks", totals.genuine_clicks],
+      ["Visitor-days", totals.visitor_days],
+      ["Bot / preview clicks", totals.bot_clicks],
+      ["Events with clicks", totals.events_with_clicks]
+    ].map(([label, value]) => '<div class="report-kpi"><span>' + escapeHtml(label) + '</span><strong>' + Number(value || 0).toLocaleString() + '</strong></div>').join("");
+    document.querySelector("#reportDaily").innerHTML = reportTable(report.daily, [
+      { key: "day", label: "Date" }, { key: "genuine_clicks", label: "Clicks" }, { key: "bot_clicks", label: "Bots" }
+    ]);
+    document.querySelector("#reportSources").innerHTML = reportTable(report.by_source, [
+      { key: "source", label: "Source" }, { key: "genuine_clicks", label: "Clicks" }
+    ]);
+    document.querySelector("#reportEvents").innerHTML = reportTable((report.by_event || []).slice(0, 10), [
+      { key: "title", label: "Event" }, { key: "city", label: "City" }, { key: "genuine_clicks", label: "Clicks" }
+    ]);
+    document.querySelector("#reportCountries").innerHTML = reportTable(report.by_country, [
+      { key: "country", label: "Country" }, { key: "genuine_clicks", label: "Clicks" }
+    ]);
+    document.querySelector("#reportDevices").innerHTML = reportTable(report.by_device, [
+      { key: "device_type", label: "Device" }, { key: "genuine_clicks", label: "Clicks" }
+    ]);
+    message(status, "Updated " + new Date(report.generated_at).toLocaleString() + ". Bot and preview traffic is excluded from genuine click totals.", true);
+  } catch (error) {
+    latestReport = null;
+    message(status, "Reports could not be loaded: " + error.message);
+  }
+}
+function exportReportsCsv() {
+  if (!latestReport) { message(document.querySelector("#reportsMessage"), "Load a report before exporting."); return; }
+  const rows = [["section","label","detail","genuine_clicks","bot_clicks","visitor_days","status"]];
+  const add = (section, items, labelKey, detailKey) => (items || []).forEach(item => rows.push([
+    section, item[labelKey] ?? "", detailKey ? (item[detailKey] ?? "") : "",
+    item.genuine_clicks ?? "", item.bot_clicks ?? "", item.visitor_days ?? "", item.status ?? ""
+  ]));
+  add("event", latestReport.by_event, "title", "city");
+  add("source", latestReport.by_source, "source");
+  add("country", latestReport.by_country, "country");
+  add("device", latestReport.by_device, "device_type");
+  add("daily", latestReport.daily, "day");
+  const csv = rows.map(row => row.map(value => '"' + String(value ?? "").replace(/"/g, '""') + '"').join(",")).join("\r\n");
+  const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "ourcityvibe-report-" + latestReport.days + "days.csv";
+  document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+}
+
 function clearForm() {
   eventForm.reset();
   document.querySelector("#eventId").value = "";
@@ -251,6 +317,9 @@ document.querySelector("#collectAllBtn").addEventListener("click", () => runColl
 document.querySelector("#fetchEventsBtn").addEventListener("click", () => runCollection());
 document.querySelector("#stopFetchBtn").addEventListener("click", () => { stopCollectionRequested = true; document.querySelector("#stopFetchBtn").disabled = true; document.querySelector("#stopFetchBtn").textContent = "Stopping…"; });
 document.querySelector("#refreshCandidatesBtn").addEventListener("click", loadCandidates);
+document.querySelector("#refreshReportsBtn").addEventListener("click", loadReports);
+document.querySelector("#reportDays").addEventListener("change", loadReports);
+document.querySelector("#exportReportsBtn").addEventListener("click", exportReportsCsv);
 document.querySelector("#candidatesList").addEventListener("click", async (event) => {
   const approve = event.target.closest("[data-candidate-approve]");
   const reject = event.target.closest("[data-candidate-reject]");
