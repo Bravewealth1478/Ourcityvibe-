@@ -46,6 +46,18 @@
           <div id="eventsList" class="events-list"><p class="muted">Sign in to load events.</p></div>
         </section>
       </div>
+      <section class="admin-card reports-card" aria-labelledby="reportsTitle">
+        <div class="events-heading"><div><h2 id="reportsTitle">Performance reports</h2><p class="muted">Genuine tracked-link activity. Detected bots and previews are shown separately.</p></div><div class="report-controls"><label for="reportDays">Period</label><select id="reportDays"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option></select><button id="refreshReportsBtn" class="quiet-button" type="button">Refresh</button><button id="exportReportsBtn" class="primary-button" type="button">Export CSV</button></div></div>
+        <p id="reportsMessage" class="message" role="status">Loading report data…</p>
+        <div id="reportKpis" class="report-kpis"><div class="report-kpi"><span>Genuine clicks</span><strong>—</strong></div><div class="report-kpi"><span>Visitor-days</span><strong>—</strong></div><div class="report-kpi"><span>Bot / preview clicks</span><strong>—</strong></div><div class="report-kpi"><span>Events with clicks</span><strong>—</strong></div></div>
+        <div class="report-grid">
+          <div class="report-table-wrap"><h3>Daily activity</h3><div id="reportDaily" class="report-table"><p class="muted">Loading…</p></div></div>
+          <div class="report-table-wrap"><h3>Traffic sources</h3><div id="reportSources" class="report-table"><p class="muted">Loading…</p></div></div>
+          <div class="report-table-wrap"><h3>Top events</h3><div id="reportEvents" class="report-table"><p class="muted">Loading…</p></div></div>
+          <div class="report-table-wrap"><h3>Countries</h3><div id="reportCountries" class="report-table"><p class="muted">Loading…</p></div></div>
+          <div class="report-table-wrap"><h3>Devices</h3><div id="reportDevices" class="report-table"><p class="muted">Loading…</p></div></div>
+        </div>
+      </section>
       <section class="admin-card candidates-card">
         <div class="events-heading"><div><h2>Event discovery</h2><p class="muted">Find local and international events, then review them before publishing.</p></div><div class="source-heading-actions"><div class="fetch-controls"><button id="stopFetchBtn" class="quiet-button" type="button" hidden>Stop after current source</button><button id="fetchEventsBtn" class="primary-button" type="button"><span aria-hidden="true">↻</span> Fetch Events</button></div></div><div id="fetchSummary" class="fetch-summary" role="status">Ready to fetch events from your enabled discovery sources.</div><div class="candidate-toolbar"><span id="candidateCount" class="count-pill">0 pending</span><button id="refreshCandidatesBtn" class="quiet-button" type="button">Refresh queue</button></div>
         <div id="candidatesList" class="candidates-list"><p class="muted">Sign in to review discovered events.</p></div>
