@@ -82,9 +82,10 @@ function renderSources(sources) {
   const node = document.querySelector("#sourcesList");
   if (!sources.length) { node.innerHTML = '<div class="empty-state">No discovery sources have been added yet.</div>'; return; }
   node.innerHTML = sources.map((source) => `<article class="source-item" data-source-id="${escapeHtml(source.id)}">
-    <div class="source-info"><div><h3>${escapeHtml(source.name)}</h3><p>${escapeHtml(source.source_type.toUpperCase())} · ${escapeHtml(source.country_scope)} · ${escapeHtml((source.country_codes || []).join(", ") || "All countries")}</p><a href="${escapeHtml(source.base_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.base_url)}</a></div><span class="source-state ${source.enabled ? "enabled" : ""}">${source.enabled ? "Enabled" : "Disabled"}</span></div>
+    <div class="source-info"><div><h3>${escapeHtml(source.name)}</h3><p>${escapeHtml(source.source_type.toUpperCase())} · ${escapeHtml(source.country_scope)} · ${escapeHtml((source.country_codes || []).join(", ") || "All countries")}</p><a href="${escapeHtml(source.base_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.base_url)}</a></div><span class="source-state ${source.enabled && source.credential_ready ? "enabled" : ""}">${!source.enabled ? "Disabled" : source.credential_ready ? "Ready" : "Needs API key"}</span></div>
     <div class="source-actions"><button class="small-button accent" type="button" data-source-run="${escapeHtml(source.id)}" ${source.enabled && source.source_type !== "manual" ? "" : "disabled"}>Collect now</button><button class="small-button" type="button" data-source-edit="${escapeHtml(source.id)}">Edit</button><button class="small-button" type="button" data-source-toggle="${escapeHtml(source.id)}" data-enabled="${source.enabled ? "true" : "false"}">${source.enabled ? "Disable" : "Enable"}</button></div>
-    ${source.last_error ? `<p class="source-error">Last collection error: ${escapeHtml(source.last_error)}</p>` : ""}
+    ${source.enabled && source.last_error ? `<p class="source-error">Last collection error: ${escapeHtml(source.last_error)}</p>` : ""}
+    ${source.enabled && !source.credential_ready ? `<p class="muted">Add ${escapeHtml(source.credential_name)} in Vercel to activate this provider.</p>` : ""}
   </article>`).join("");
 }
 async function runCollection(sourceId = null) {
@@ -118,17 +119,19 @@ async function runCollection(sourceId = null) {
         <strong>${escapeHtml(item.source_name)}</strong><span class="source-state ${item.status === "succeeded" ? "enabled" : ""}">${escapeHtml(item.status)}</span>
         <p>${item.items_seen} seen · ${item.items_created} new · ${item.items_updated} refreshed · ${item.duplicates_found} duplicates</p>
         ${item.error ? `<p class="source-error">${escapeHtml(item.error)}</p>` : ""}
+        ${item.note ? `<p class="muted">${escapeHtml(item.note)}</p>` : ""}
       </article>`).join("");
       more = !sourceId && results.length === 1;
       offset += results.length;
       if (!results.length) more = false;
     }
     const total = allResults.reduce((sum, item) => sum + item.items_created, 0);
-    const failed = allResults.filter(item => item.status !== "succeeded").length;
+    const failed = allResults.filter(item => item.status === "failed").length;
+    const skipped = allResults.filter(item => item.status === "skipped").length;
     const stopped = stopCollectionRequested && more;
     const finalText = stopped
       ? "Stopped after " + allResults.length + " source(s). " + total + " new candidate(s) added. Click Fetch Events to continue."
-      : "Finished. " + allResults.length + " source(s) checked, " + total + " new candidate(s) added to review." + (failed ? " " + failed + " source(s) reported errors." : "");
+      : "Finished. " + allResults.length + " source(s) checked, " + total + " new candidate(s) added to review." + (skipped ? " " + skipped + " source(s) waiting for API credentials." : "") + (failed ? " " + failed + " source(s) reported errors." : "");
     message(messageNode, finalText, !failed && !stopped);
     if (summaryNode) summaryNode.textContent = finalText;
     await Promise.all([loadSources(), loadCandidates()]);
