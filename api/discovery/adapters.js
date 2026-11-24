@@ -30,29 +30,31 @@ function countryCode(value) {
   return /^[A-Z]{2}$/.test(s) ? s : null;
 }
 function normalise(raw, source, sourceUrl) {
-  const loc = raw.location && typeof raw.location === "object" ? raw.location : {};
-  const addr = loc.address && typeof loc.address === "object" ? loc.address : {};
-  const offers = Array.isArray(raw.offers) ? raw.offers[0] : (raw.offers || {});
-  const img = Array.isArray(raw.image) ? raw.image[0] : raw.image;
-  const title = clean(raw.name || raw.title || raw.summary || "");
+  const ticketmasterVenue = raw._embedded && raw._embedded.venues && raw._embedded.venues[0] || {};
+  const eventbriteVenue = raw.venue || {};
+  const loc = raw.location && typeof raw.location === "object" ? raw.location : ticketmasterVenue;
+  const addr = loc.address && typeof loc.address === "object" ? loc.address : (eventbriteVenue.address || {});
+  const offers = Array.isArray(raw.offers) ? raw.offers[0] : (raw.offers || raw.priceRanges && raw.priceRanges[0] || {});
+  const img = Array.isArray(raw.image) ? raw.image[0] : (Array.isArray(raw.images) ? raw.images[0] : raw.image);
+  const title = clean(raw.name && (raw.name.text || raw.name) || raw.title || raw.summary || "");
   if (!title) return null;
   const country = raw.country || raw.addressCountry || addr.addressCountry || null;
-  const min = Number(offers.lowPrice ?? offers.price ?? raw.price_min);
-  const max = Number(offers.highPrice ?? raw.price_max);
+  const min = Number(offers.lowPrice ?? offers.price ?? offers.min ?? raw.price_min);
+  const max = Number(offers.highPrice ?? offers.max ?? raw.price_max);
   return {
     external_id: raw.identifier ? String(raw.identifier.value || raw.identifier) : (raw.id == null ? null : String(raw.id)),
     title: title.slice(0, 300),
-    description: clean(raw.description || raw.content || "").slice(0, 12000) || null,
+    description: clean(raw.description && (raw.description.text || raw.description) || raw.content || "").slice(0, 12000) || null,
     category: clean(raw.category || raw.genre || "").slice(0, 120) || null,
-    organizer_name: clean(raw.organizer && (raw.organizer.name || raw.organizer) || raw.organizer_name || "").slice(0, 240) || null,
-    venue_name: clean(loc.name || raw.venue_name || raw.venue || "").slice(0, 240) || null,
+    organizer_name: clean(raw.organizer && (raw.organizer.name || raw.organizer) || raw.organizer_name || raw.promoter && raw.promoter.name || "").slice(0, 240) || null,
+    venue_name: clean(loc.name || raw.venue_name || (typeof raw.venue === "string" ? raw.venue : "") || "").slice(0, 240) || null,
     address: clean([addr.streetAddress, addr.postalCode].filter(Boolean).join(", ") || raw.address || "").slice(0, 500) || null,
-    city: clean(raw.city || raw.addressLocality || addr.addressLocality || "").slice(0, 120) || null,
-    region: clean(raw.region || raw.addressRegion || addr.addressRegion || "").slice(0, 120) || null,
-    country: clean(country && typeof country === "object" ? country.name || country.identifier : country || "").slice(0, 120) || null,
-    country_code: countryCode(raw.country_code || raw.countryCode || (country && typeof country === "object" ? country.identifier : (String(country || "").length === 2 ? country : null))),
+    city: clean(raw.city || raw.addressLocality || addr.addressLocality || addr.city || ticketmasterVenue.city && ticketmasterVenue.city.name || "").slice(0, 120) || null,
+    region: clean(raw.region || raw.addressRegion || addr.addressRegion || ticketmasterVenue.state && ticketmasterVenue.state.name || "").slice(0, 120) || null,
+    country: clean(country && typeof country === "object" ? country.name || country.identifier : country || addr.country || ticketmasterVenue.country && ticketmasterVenue.country.name || "").slice(0, 120) || null,
+    country_code: countryCode(raw.country_code || raw.countryCode || addr.country_code || ticketmasterVenue.country && ticketmasterVenue.country.countryCode || (country && typeof country === "object" ? country.identifier : (String(country || "").length === 2 ? country : null))),
     timezone: raw.timezone || raw.timeZone || null,
-    event_date: dateOf(raw.startDate || raw.start_date || raw.start || raw.eventDate || raw.date),
+    event_date: dateOf(raw.startDate || raw.start_date || raw.start && (raw.start.utc || raw.start.dateTime || raw.start.localDate || raw.start) || raw.dates && raw.dates.start && (raw.dates.start.dateTime || raw.dates.start.date) || raw.eventDate || raw.date),
     end_date: dateOf(raw.endDate || raw.end_date || raw.end),
     ticket_url: urlOf(raw.url || raw.ticket_url || raw.ticketUrl, sourceUrl),
     source_url: urlOf(sourceUrl, source && source.base_url),
@@ -136,12 +138,28 @@ function parseJsonLd(html, source) {
 function parseJsonApi(body, source) {
   let parsed;
   try { parsed = JSON.parse(body); } catch { throw new Error("The configured JSON source returned invalid JSON."); }
-  const path = source.config && typeof source.config.items_path === "string" ? source.config.items_path : "";
-  let items = parsed;
-  if (path) for (const key of path.split(".").filter(Boolean)) items = items && items[key];
-  else if (!Array.isArray(items)) items = items.events || items.items || items.results || items.data || [];
+  const provider = source.config && source.config.provider;
+  let items;
+  if (provider === "ticketmaster") items = parsed && parsed._embedded && parsed._embedded.events || [];
+  else if (provider === "eventbrite") items = parsed && parsed.events || [];
+  else {
+    const path = source.config && typeof source.config.items_path === "string" ? source.config.items_path : "";
+    items = parsed;
+    if (path) for (const key of path.split(".").filter(Boolean)) items = items && items[key];
+    else if (!Array.isArray(items)) items = items.events || items.items || items.results || items.data || [];
+  }
   if (!Array.isArray(items)) throw new Error("JSON source did not contain an event array. Configure items_path.");
-  return items.map(raw => normalise(raw, source, source.base_url)).filter(Boolean);
+  return items.map(raw => {
+    if (provider === "eventbrite") {
+      const venue = raw.venue || {};
+      return normalise({ ...raw, name: raw.name && raw.name.text, description: raw.description && raw.description.text,
+        start: raw.start && raw.start.utc, url: raw.url, venue_name: venue.name,
+        city: venue.address && venue.address.city, country: venue.address && venue.address.country,
+        country_code: venue.address && venue.address.country_code,
+        image: raw.logo && raw.logo.url }, source, source.base_url);
+    }
+    return normalise(raw, source, source.base_url);
+  }).filter(Boolean);
 }
 function blockedIp(ip) {
   const family = net.isIP(ip);
@@ -179,7 +197,7 @@ async function resolvePublicAddress(value) {
   if (!resolved.length || resolved.some(x => blockedIp(x.address))) throw new Error("Source host resolves to a private or reserved network address.");
   return resolved[0];
 }
-function requestPinned(value, resolved) {
+function requestPinned(value, resolved, extraHeaders = {}) {
   const u = new URL(value);
   const transport = u.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
@@ -251,10 +269,26 @@ function allowedContentType(sourceType, contentType) {
 }
 async function fetchSource(source) {
   let current = urlOf(source.base_url);
+  const config = source.config || {};
+  const extraHeaders = {};
+  if (config.auth_header_env) {
+    const secret = process.env[String(config.auth_header_env)];
+    if (!secret) throw new Error("Missing API credential: add the " + config.auth_header_env + " environment variable in Vercel, then redeploy.");
+    const headerName = config.auth_header_name === "X-API-Key" ? "X-API-Key" : "Authorization";
+    const prefix = config.auth_header_prefix === "Bearer" ? "Bearer " : "";
+    extraHeaders[headerName] = prefix + secret;
+  }
+  if (config.auth_query_env) {
+    const secret = process.env[String(config.auth_query_env)];
+    if (!secret) throw new Error("Missing API credential: add the " + config.auth_query_env + " environment variable in Vercel, then redeploy.");
+    const u = new URL(current);
+    u.searchParams.set(String(config.auth_query_param || "apikey"), secret);
+    current = u.toString();
+  }
   if (!current) throw new Error("Source URL must be HTTP or HTTPS.");
   for (let i = 0; i <= 3; i++) {
     const resolved = await resolvePublicAddress(current);
-    const response = await requestPinned(current, resolved);
+    const response = await requestPinned(current, resolved, extraHeaders);
     if ([301,302,303,307,308].includes(response.status)) {
       if (!response.location || i === 3) throw new Error("Source redirected too many times or omitted its redirect target.");
       current = urlOf(response.location, current);
