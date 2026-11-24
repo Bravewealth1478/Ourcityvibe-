@@ -112,75 +112,6 @@ function validateEvent(body, creating) {
   return { title, ticket_url: parsed.toString(), platform, city, event_date: eventDate, image_url: imageUrl };
 }
 
-async function runAiEventSearch(config, areaInput) {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is missing from Vercel Production.");
-  const area = String(areaInput || "Nigeria").trim().slice(0,120) || "Nigeria";
-  const today = new Date(), until = new Date(Date.now() + 120 * 86400000);
-  const prompt = [
-    "Use web search to find up to 25 real upcoming public events in " + area + ".",
-    "Date window " + today.toISOString().slice(0,10) + " through " + until.toISOString().slice(0,10) + ". Search concerts, festivals, comedy, nightlife, theatre, exhibitions, conferences, sports and family events.",
-    "Use event organiser, venue, official event and ticketing pages. Exclude past or undated events. Never invent details. Each result must have a direct source_url verifying the event, title, event_date (ISO 8601), city or venue, and ticket_url (use source_url if a direct ticket link is unavailable).",
-    "Return JSON only with {events:[{title,description,category,organizer_name,venue_name,address,city,region,country,country_code,timezone,event_date,end_date,ticket_url,source_url,image_url,currency,price_min,price_max}],search_notes}."
-  ].join("\n\n");
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method:"POST", headers:{authorization:"Bearer "+process.env.OPENAI_API_KEY,"content-type":"application/json"},
-    body:JSON.stringify({model:process.env.OPENAI_SEARCH_MODEL||"gpt-4.1-mini",tools:[{type:"web_search"}],tool_choice:"auto",input:prompt}),
-    signal:AbortSignal.timeout(55000)
-  });
-  const raw=await response.text();
-  if(!response.ok) throw new Error("OpenAI search failed ("+response.status+"): "+raw.slice(0,500));
-  const result=JSON.parse(raw);
-  const output=(result.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n")||result.output_text||"";
-  let parsed; try { parsed=JSON.parse(output); } catch { throw new Error("OpenAI returned an unreadable event list."); }
-  const rows=await supabase(config,"event_sources?select=id&name=eq.OpenAI%20Web%20Search&limit=1");
-  let sourceId=rows[0]?.id;
-  if(!sourceId) {
-    const made=await supabase(config,"event_sources?select=id",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({name:"OpenAI Web Search",source_type:"manual",base_url:"https://api.openai.com/v1/responses",enabled:true,country_scope:"global",country_codes:[],config:{provider:"openai_web_search"}})});
-    sourceId=made[0].id;
-  }
-  const runs=await supabase(config,"discovery_runs?select=id",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({source_id:sourceId,trigger_type:"manual",status:"running",metadata:{provider:"openai_web_search",area}})});
-  const runId=runs[0].id;
-  let seen=0,created=0,updated=0,duplicates=0;
-  try {
-    for(const rawEvent of (Array.isArray(parsed.events)?parsed.events:[]).slice(0,25)) {
-      const title=String(rawEvent.title||"").trim().slice(0,300);
-      const date=rawEvent.event_date&&Number.isFinite(Date.parse(rawEvent.event_date))?new Date(rawEvent.event_date).toISOString():null;
-      const httpUrl=(v)=>{try{const u=new URL(String(v||""));return ["http:","https:"].includes(u.protocol)?u.toString():null;}catch{return null;}};
-      const sourceUrl=httpUrl(rawEvent.source_url)||httpUrl(rawEvent.ticket_url);
-      if(!title||!date||!sourceUrl) continue;
-      const cc=/^[A-Za-z]{2}$/.test(String(rawEvent.country_code||""))?String(rawEvent.country_code).toUpperCase():null;
-      const fp=createHash("sha256").update([title,date,rawEvent.city||"",cc||""].join("|").toLowerCase().replace(/\s+/g," ").trim()).digest("hex");
-      const payload={
-        source_id:sourceId,discovery_run_id:runId,title,description:String(rawEvent.description||"").slice(0,12000)||null,
-        category:String(rawEvent.category||"").slice(0,120)||null,organizer_name:String(rawEvent.organizer_name||"").slice(0,240)||null,
-        venue_name:String(rawEvent.venue_name||"").slice(0,240)||null,address:String(rawEvent.address||"").slice(0,500)||null,
-        city:String(rawEvent.city||"").slice(0,120)||null,region:String(rawEvent.region||"").slice(0,120)||null,
-        country:String(rawEvent.country||"").slice(0,120)||null,country_code:cc,timezone:String(rawEvent.timezone||"").slice(0,100)||null,
-        event_date:date,end_date:rawEvent.end_date&&Date.parse(rawEvent.end_date)?new Date(rawEvent.end_date).toISOString():null,
-        ticket_url:httpUrl(rawEvent.ticket_url)||sourceUrl,source_url:sourceUrl,image_url:httpUrl(rawEvent.image_url),
-        currency:String(rawEvent.currency||"").slice(0,8)||null,
-        price_min:rawEvent.price_min==null?null:(Number.isFinite(Number(rawEvent.price_min))?Number(rawEvent.price_min):null),
-        price_max:rawEvent.price_max==null?null:(Number.isFinite(Number(rawEvent.price_max))?Number(rawEvent.price_max):null),
-        fingerprint:fp,popularity_signals:{discovery_method:"openai_web_search"},
-        source_payload:{provider:"openai_web_search",model:result.model||process.env.OPENAI_SEARCH_MODEL||"gpt-4.1-mini"},
-        last_seen_at:new Date().toISOString(),updated_at:new Date().toISOString()
-      };
-      if(payload.end_date&&payload.end_date<payload.event_date) payload.end_date=null;
-      seen++;
-      const existing=await supabase(config,"discovered_events?select=id&source_id=eq."+sourceId+"&fingerprint=eq."+fp+"&limit=1");
-      if(existing.length){await supabase(config,"discovered_events?id=eq."+existing[0].id,{method:"PATCH",body:JSON.stringify(payload)});updated++;continue;}
-      const cross=await supabase(config,"discovered_events?select=id&fingerprint=eq."+fp+"&limit=1");
-      if(cross.length){payload.review_status="duplicate";payload.duplicate_of=cross[0].id;duplicates++;}
-      await supabase(config,"discovered_events",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify(payload)});created++;
-    }
-    await supabase(config,"discovery_runs?id=eq."+runId,{method:"PATCH",body:JSON.stringify({status:"succeeded",finished_at:new Date().toISOString(),items_seen:seen,items_created:created,items_updated:updated,duplicates_found:duplicates,metadata:{provider:"openai_web_search",area,search_notes:String(parsed.search_notes||"").slice(0,1000),response_id:result.id||null}})});
-    await supabase(config,"event_sources?id=eq."+sourceId,{method:"PATCH",body:JSON.stringify({last_checked_at:new Date().toISOString(),last_success_at:new Date().toISOString(),last_error:null,updated_at:new Date().toISOString()})});
-  } catch(error) {
-    await supabase(config,"discovery_runs?id=eq."+runId,{method:"PATCH",body:JSON.stringify({status:"partial",finished_at:new Date().toISOString(),items_seen:seen,items_created:created,items_updated:updated,duplicates_found:duplicates,error_message:String(error.message||"Import failed").slice(0,1000)})});
-    throw error;
-  }
-  return {status:"succeeded",items_seen:seen,items_created:created,items_updated:updated,duplicates_found:duplicates,search_notes:parsed.search_notes||null};
-}
 
 exports.handler = async (event) => {
   let config;
@@ -284,10 +215,6 @@ exports.handler = async (event) => {
     if (!checkOrigin(event)) return json(403, { error: "Request origin could not be verified." });
     let body;
     try { body = JSON.parse(event.body || "{}"); } catch { return json(400, { error: "Invalid request." }); }
-    if (action === "ai-discover" && event.httpMethod === "POST") {
-      try { return json(200, { result: await runAiEventSearch(config, body.area || "Nigeria") }); }
-      catch (error) { console.error("AI event discovery failed:", error); return json(502, { error: String(error.message || "AI discovery failed").slice(0,700) }); }
-    }
     if (action === "collect" && event.httpMethod === "POST") {
       const sourceId = body.source_id ? String(body.source_id) : null;
       if (sourceId && !/^[0-9a-f-]{36}$/i.test(sourceId)) return json(400, { error: "Invalid source id." });
