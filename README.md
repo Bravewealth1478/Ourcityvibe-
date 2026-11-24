@@ -170,3 +170,7 @@ The provider adapters normalize event titles, descriptions, dates, venues, locat
 Add each variable in Vercel Project → Settings → Environment Variables for Production, then redeploy. The secrets are read only on the server, are never stored in the source registry, and are not sent to the browser. Until a key is configured, the corresponding provider reports a clear missing-credential error rather than silently returning no events.
 
 The API integrations have parser tests using representative provider payloads. Live API access still needs to be verified with valid credentials. Coverage is not exhaustive: Eventbrite and Ticketmaster availability varies by country and event category. Additional providers and approved feeds will be added as independent coverage layers; no source is allowed to auto-publish candidates.
+
+
+## Phase 3 provider credential handling
+The one-click collector checks provider credentials before creating a discovery run. API sources without their required environment variable are reported as skipped and waiting for configuration, rather than recording a failed run on every fetch. The source list identifies these providers as **Needs API key** and names the required Vercel variable without exposing its value. Disabled legacy Eventbrite directory sources remain excluded from collection; stale errors on disabled sources are hidden.
