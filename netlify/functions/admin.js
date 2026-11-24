@@ -145,6 +145,44 @@ exports.handler = async (event) => {
     } catch (error) { console.error("Source listing failed:", error); return json(500, { error: error.message }); }
   }
   try {
+    if (action === "promo-caption" && event.httpMethod === "GET") {
+      const id = event.queryStringParameters?.id || "";
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json(400, { error: "Invalid event id." });
+      const rows = await supabase(config, "event_promo_captions?select=id,event_id,caption,short_caption,affiliate_disclosure,status,model,generated_at,updated_at,approved_at&event_id=eq." + id + "&limit=1");
+      return json(200, { draft: rows[0] || null });
+    }
+    if (action === "promo-generate" && event.httpMethod === "POST") {
+      if (!process.env.OPENAI_API_KEY) return json(503, { error: "AI captions are not configured yet. Add OPENAI_API_KEY to the Netlify environment variables, then redeploy." });
+      if (!/^[0-9a-f-]{36}$/i.test(body.id || "")) return json(400, { error: "Invalid event id." });
+      const events = await supabase(config, "events?select=id,title,description,city,event_date,venue_name,organizer_name,ticket_url,slug,status&id=eq." + body.id + "&limit=1");
+      if (!events.length || events[0].status !== "active") return json(404, { error: "Active event not found." });
+      const item = events[0];
+      const trackedLink = "https://" + String(event.headers.host || "ourcityvibe.vercel.app") + "/go/" + item.slug;
+      const disclosure = String(body.affiliate_disclosure || process.env.AFFILIATE_DISCLOSURE || "").trim().slice(0, 500);
+      const facts = { title: item.title, city: item.city, venue: item.venue_name, organizer: item.organizer_name, date: item.event_date, description: item.description, ticket_url: item.ticket_url, tracked_link: trackedLink };
+      const prompt = ["Write promotional copy using only supplied event facts. Do not invent performers, prices, availability, venue details, dates, urgency, or claims.", "Create two versions: a concise storytelling social caption and a very short WhatsApp Status / Stories version.", "Use a natural, inviting voice. Include the tracked link exactly as supplied in BOTH versions. Do not add unsupported hashtags.", "Return strict JSON with string fields caption and short_caption. No markdown fences.", "Event facts: " + JSON.stringify(facts)].join("\n\n");
+      const response = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { authorization: "Bearer " + process.env.OPENAI_API_KEY, "content-type": "application/json" }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", temperature: 0.7, response_format: { type: "json_object" }, messages: [{ role: "system", content: "You are a careful event copywriter. Never invent event facts." }, { role: "user", content: prompt }] }), signal: AbortSignal.timeout(30000) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error("AI caption generation failed (" + response.status + "): " + (result.error?.message || "Provider request failed."));
+      let generated;
+      try { generated = JSON.parse(result.choices?.[0]?.message?.content || "{}"); } catch { throw new Error("The AI returned an unreadable caption. Please try again."); }
+      const caption = String(generated.caption || "").trim().slice(0, 5000);
+      const shortCaption = String(generated.short_caption || "").trim().slice(0, 1500);
+      if (!caption || !shortCaption) throw new Error("The AI did not return both caption versions. Please try again.");
+      const now = new Date().toISOString();
+      const values = { event_id: item.id, caption, short_caption: shortCaption, affiliate_disclosure: disclosure || null, status: "draft", model: process.env.OPENAI_MODEL || "gpt-4o-mini", generated_at: now, updated_at: now, approved_at: null };
+      const saved = await supabase(config, "event_promo_captions?on_conflict=event_id", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(values) });
+      return json(200, { draft: saved[0] || values });
+    }
+    if (action === "promo-save" && event.httpMethod === "POST") {
+      if (!/^[0-9a-f-]{36}$/i.test(body.id || "")) return json(400, { error: "Invalid event id." });
+      const caption = String(body.caption || "").trim(), shortCaption = String(body.short_caption || "").trim(), disclosure = String(body.affiliate_disclosure || "").trim().slice(0, 500);
+      if (!caption || caption.length > 5000 || !shortCaption || shortCaption.length > 1500) return json(400, { error: "Both caption versions are required and must be within the length limits." });
+      const now = new Date().toISOString();
+      const values = { event_id: body.id, caption, short_caption: shortCaption, affiliate_disclosure: disclosure || null, status: body.approve ? "approved" : "draft", updated_at: now, approved_at: body.approve ? now : null };
+      const saved = await supabase(config, "event_promo_captions?on_conflict=event_id", { method: "POST", headers: { prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(values) });
+      return json(200, { draft: saved[0] || values });
+    }
     if (action === "events" && event.httpMethod === "GET") {
       const events = await supabase(config, "events?select=id,title,ticket_url,platform,city,event_date,image_url,slug,status,created_at&order=created_at.desc");
       const statsRows = await supabase(config, "rpc/admin_event_click_stats", { method: "POST", body: "{}" });
