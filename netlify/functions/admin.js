@@ -124,7 +124,7 @@ async function runAiEventSearch(config, areaInput) {
   ].join("\n\n");
   const response = await fetch("https://api.openai.com/v1/responses", {
     method:"POST", headers:{authorization:"Bearer "+process.env.OPENAI_API_KEY,"content-type":"application/json"},
-    body:JSON.stringify({model:process.env.OPENAI_SEARCH_MODEL||"gpt-4.1-mini",tools:[{type:"web_search"}],tool_choice:"auto",text:{format:{type:"json_object"}},input:prompt}),
+    body:JSON.stringify({model:process.env.OPENAI_SEARCH_MODEL||"gpt-4.1-mini",tools:[{type:"web_search"}],tool_choice:"auto",input:prompt}),
     signal:AbortSignal.timeout(55000)
   });
   const raw=await response.text();
