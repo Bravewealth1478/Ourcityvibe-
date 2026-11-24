@@ -59,3 +59,33 @@ test("enforces source-specific response content types", () => {
   assert.equal(allowedContentType("api", "image/png"), false);
   assert.equal(allowedContentType("rss", "text/html"), false);
 });
+
+test("normalises Ticketmaster Discovery API event payloads", () => {
+  const rows = parseJsonApi(JSON.stringify({ _embedded: { events: [{
+    id: "tm-1", name: "Lagos not relevant", url: "https://ticketmaster.example/event/tm-1",
+    dates: { start: { dateTime: "2027-05-10T19:00:00Z" } },
+    images: [{ url: "https://images.example/tm-1.jpg" }],
+    _embedded: { venues: [{ name: "Arena", city: { name: "London" }, country: { name: "United Kingdom", countryCode: "GB" } }] }
+  }] } }), { ...source, config: { provider: "ticketmaster" } });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].external_id, "tm-1");
+  assert.equal(rows[0].city, "London");
+  assert.equal(rows[0].country_code, "GB");
+  assert.equal(rows[0].venue_name, "Arena");
+  assert.equal(rows[0].ticket_url, "https://ticketmaster.example/event/tm-1");
+});
+
+test("normalises Eventbrite API event payloads", () => {
+  const rows = parseJsonApi(JSON.stringify({ events: [{
+    id: "eb-1", name: { text: "Lagos Tech Meetup" }, description: { text: "A community technology event" },
+    url: "https://www.eventbrite.com/e/eb-1", start: { utc: "2027-06-01T17:00:00Z" },
+    logo: { url: "https://img.example/eb-1.jpg" },
+    venue: { name: "Civic Centre", address: { city: "Lagos", country: "Nigeria", country_code: "NG" } }
+  }] }), { ...source, config: { provider: "eventbrite" } });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, "Lagos Tech Meetup");
+  assert.equal(rows[0].city, "Lagos");
+  assert.equal(rows[0].country_code, "NG");
+  assert.equal(rows[0].venue_name, "Civic Centre");
+  assert.equal(rows[0].image_url, "https://img.example/eb-1.jpg");
+});
