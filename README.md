@@ -154,3 +154,19 @@ The built-in directory set is an initial coverage layer, not a guarantee that ev
 The primary Fetch Events action processes enabled non-manual sources one at a time in separate bounded requests. The dashboard displays progress and offers **Stop after current source**; stopping prevents the next source request, while the currently running source request is allowed to finish. The process otherwise ends when all enabled sources have been checked. It does not run continuously or in the background.
 
 HTTP 429 means the external provider is rate limiting or temporarily refusing automated requests. This is not an admin login or database error, and it does not mean events were found. The collector reports this condition without an automatic retry loop. HTTP 403 is reported as an automated-access denial. An official API or an approved feed from another provider may be needed where a directory blocks requests.
+
+
+## Replacing blocked event-directory scraping with official APIs
+The built-in Eventbrite directory-page sources are now disabled because they returned HTTP 429 under automated collection. They are retained in the registry for reference, but are not part of the normal Fetch Events run.
+
+The collector now supports authenticated JSON API providers:
+- **Ticketmaster Discovery API** for the United Kingdom, United States, Canada, and Australia.
+- **Eventbrite API** for Lagos, Abuja, and Ibadan, Nigeria.
+
+The provider adapters normalize event titles, descriptions, dates, venues, locations, images, ticket URLs, and country codes into the shared review queue. These API sources are enabled but require provider credentials in Vercel:
+- `TICKETMASTER_API_KEY` — obtain a Discovery API key from https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/
+- `EVENTBRITE_PRIVATE_TOKEN` — obtain an API token from https://www.eventbrite.com/platform/api/
+
+Add each variable in Vercel Project → Settings → Environment Variables for Production, then redeploy. The secrets are read only on the server, are never stored in the source registry, and are not sent to the browser. Until a key is configured, the corresponding provider reports a clear missing-credential error rather than silently returning no events.
+
+The API integrations have parser tests using representative provider payloads. Live API access still needs to be verified with valid credentials. Coverage is not exhaustive: Eventbrite and Ticketmaster availability varies by country and event category. Additional providers and approved feeds will be added as independent coverage layers; no source is allowed to auto-publish candidates.
