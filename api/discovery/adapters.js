@@ -89,7 +89,7 @@ function parseRssAtom(xml, source) {
     id: value(b, "guid") || value(b, "id"),
     title: value(b, "title"),
     description: value(b, "description") || value(b, "summary") || value(b, "content"),
-    startDate: value(b, "startDate") || value(b, "eventDate") || value(b, "pubDate") || value(b, "published") || value(b, "updated"),
+    startDate: value(b, "startDate") || value(b, "eventDate") || value(b, "dtstart"),
     url: atom ? (attr(b, "link", "href") || value(b, "link")) : value(b, "link"),
     category: value(b, "category"),
     image: attr(b, "enclosure", "url") || attr(b, "image", "href")
