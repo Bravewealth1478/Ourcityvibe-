@@ -271,6 +271,11 @@ async function fetchSource(source) {
   let current = urlOf(source.base_url);
   const config = source.config || {};
   const extraHeaders = {};
+  const allowedCredentialNames = new Set(["TICKETMASTER_API_KEY", "EVENTBRITE_PRIVATE_TOKEN", "PREDICTHQ_API_KEY", "SONGKICK_API_KEY"]);
+  if (config.auth_header_env || config.auth_query_env) {
+    const credentialName = String(config.auth_header_env || config.auth_query_env);
+    if (!allowedCredentialNames.has(credentialName)) throw new Error("This source references an unsupported API credential name.");
+  }
   if (config.auth_header_env) {
     const secret = process.env[String(config.auth_header_env)];
     if (!secret) throw new Error("Missing API credential: add the " + config.auth_header_env + " environment variable in Vercel, then redeploy.");
@@ -291,7 +296,11 @@ async function fetchSource(source) {
     const response = await requestPinned(current, resolved, extraHeaders);
     if ([301,302,303,307,308].includes(response.status)) {
       if (!response.location || i === 3) throw new Error("Source redirected too many times or omitted its redirect target.");
+      const previous = new URL(current);
       current = urlOf(response.location, current);
+      if ((config.auth_header_env || config.auth_query_env) && current && new URL(current).origin !== previous.origin) {
+        throw new Error("Authenticated event API redirected to another host. Cross-host redirects are blocked to protect API credentials.");
+      }
       if (!current) throw new Error("Source returned an unsafe redirect URL.");
       continue;
     }
