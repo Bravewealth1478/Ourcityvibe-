@@ -166,8 +166,15 @@ exports.handler = async (event) => {
       if (!response.ok) throw new Error("AI caption generation failed (" + response.status + "): " + (result.error?.message || "Provider request failed."));
       let generated;
       try { generated = JSON.parse(result.choices?.[0]?.message?.content || "{}"); } catch { throw new Error("The AI returned an unreadable caption. Please try again."); }
-      const caption = String(generated.caption || "").trim().slice(0, 5000);
-      const shortCaption = String(generated.short_caption || "").trim().slice(0, 1500);
+      let caption = String(generated.caption || "").trim();
+      let shortCaption = String(generated.short_caption || "").trim();
+      const addRequiredText = (value) => {
+        if (!value.includes(trackedLink)) value = value.trim() + "\n\n" + trackedLink;
+        if (disclosure && !value.toLowerCase().includes(disclosure.toLowerCase())) value = value.trim() + "\n\n" + disclosure;
+        return value;
+      };
+      caption = addRequiredText(caption).slice(0, 5000);
+      shortCaption = addRequiredText(shortCaption).slice(0, 1500);
       if (!caption || !shortCaption) throw new Error("The AI did not return both caption versions. Please try again.");
       const now = new Date().toISOString();
       const values = { event_id: item.id, caption, short_caption: shortCaption, affiliate_disclosure: disclosure || null, status: "draft", model: process.env.OPENAI_MODEL || "gpt-4o-mini", generated_at: now, updated_at: now, approved_at: null };
